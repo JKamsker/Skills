@@ -11,6 +11,17 @@ For modern .NET CLIs, prefer this baseline:
 
 This matches the strongest pattern from `jf`: Spectre owns the command surface, while the service container owns runtime wiring.
 
+## Canonical Example Assets
+
+Prefer the small examples in this skill before copying repository code directly:
+
+- [../assets/examples/csharp/spectre/command-tree/Program.cs](../assets/examples/csharp/spectre/command-tree/Program.cs): task-first branch registration with descriptions and a default subcommand.
+- [../assets/examples/csharp/spectre/runtime/GlobalOptions.cs](../assets/examples/csharp/spectre/runtime/GlobalOptions.cs): shared Spectre global flags for host, profile, output, dry-run, and confirmations.
+- [../assets/examples/csharp/spectre/runtime/TargetResolver.cs](../assets/examples/csharp/spectre/runtime/TargetResolver.cs): canonical host keys, profile matching, and flag/env/config/default precedence.
+- [../assets/examples/csharp/spectre/runtime/ApiCommand.cs](../assets/examples/csharp/spectre/runtime/ApiCommand.cs): central context resolution, exit-code mapping, and recovery-oriented error reporting.
+- [../assets/examples/csharp/spectre/runtime/DangerousActionGuard.cs](../assets/examples/csharp/spectre/runtime/DangerousActionGuard.cs): TTY-aware confirmation, `--dry-run`, and `--yes`.
+- [../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs](../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs): timestamped diagnostic logs with header redaction.
+
 ## Application Shape
 
 Keep the command tree in one bootstrap location so the product surface is visible in one file, but keep the implementation feature-based rather than layer-based.

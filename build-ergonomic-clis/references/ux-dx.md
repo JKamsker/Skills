@@ -26,7 +26,7 @@ Use this guide first. It defines the product shape of the CLI before framework-s
   - Good: `tool auth login`, `tool auth profiles use`, `tool items images list`
   - Avoid: `tool auth-login`, `tool profile-use`, `tool items-images-list`
 - Group by user-facing domain, not by internal API tags.
-  - `jf` is a good model: `auth`, `items`, `playlists`, `sessions`, `server`.
+  - A strong service-CLI model is `auth`, `items`, `playlists`, `sessions`, `server`.
 - Keep low-level escape hatches separate.
   - Use a branch like `raw`, `api`, or `request` for unsupported endpoints.
 - Use a small, repeated verb set at the leaves.
@@ -140,8 +140,25 @@ If repo or directory inference exists, document it as a lower-priority fallback,
 
 Good examples from the local references:
 
-- `ztnet` binds host defaults to profiles and only reuses stored auth when the profile host matches the target host.
-- `fj-ex` can infer host and repo from git remotes or `FJ_FALLBACK_HOST`, but that behavior should stay visible in docs and errors.
+- One local reference binds host defaults to profiles and only reuses stored auth when the profile host matches the target host.
+- Another local reference can infer host and repo from git remotes or an environment fallback, but that behavior stays visible in docs and errors.
+
+## Distilled Patterns from Local Repos
+
+The bundled reference repos converge on a small set of patterns worth teaching directly.
+
+- Build one visible command tree in one place, and group by user task rather than transport or backend tags.
+  - [../assets/examples/csharp/spectre/command-tree/Program.cs](../assets/examples/csharp/spectre/command-tree/Program.cs) shows the same "auth / projects / server" branch style without repo-specific surface area.
+- Resolve target, profile, and auth once in shared runtime code instead of scattering that logic through commands.
+  - See [../assets/examples/csharp/spectre/runtime/TargetResolver.cs](../assets/examples/csharp/spectre/runtime/TargetResolver.cs) and [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs).
+- Make target inference layered, inspectable, and reversible.
+  - A good model is explicit flags first, then git context, then environment fallback, with clear errors when nothing resolves. See [../assets/examples/rust/clap/target_resolution.rs](../assets/examples/rust/clap/target_resolution.rs).
+- Bind stored credentials to canonical host keys and refuse to silently reuse them across mismatched targets.
+  - The canonical sketch is [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs).
+- Treat machine mode as a first-class contract instead of a formatter toggle.
+  - The right shape is stable JSON, stderr for warnings, `--dry-run`, `--yes`, `--quiet`, and TTY-aware table headers. See [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs).
+- Pair user-facing recovery instructions with saved diagnostics.
+  - The distilled runtime pieces are [../assets/examples/csharp/spectre/runtime/ApiCommand.cs](../assets/examples/csharp/spectre/runtime/ApiCommand.cs) and [../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs](../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs).
 
 ## Environment Variables
 
@@ -191,7 +208,7 @@ Avoid behavior that makes the CLI feel clever but unpredictable.
 - Do not perform hidden retries that cross auth or target boundaries.
 - Do not mutate config just because a command succeeded once unless the user opted in.
 
-The local cautionary example is the "latest run" style workflow in `fj-ex`. The convenience flag is fine. Implicitly treating a missing run identifier as "latest" is not.
+The local cautionary example is the "latest run" style workflow where a convenience flag exists. The convenience flag is fine. Implicitly treating a missing run identifier as "latest" is not.
 
 ## Output and Exit Codes
 
@@ -296,6 +313,17 @@ Rules:
 - `--quiet` suppresses all verbose output. It does not suppress diagnostic file writes.
 - The diagnostic log file always captures `-vvv`-level detail regardless of the verbosity flag.
 - If the CLI supports retries, log each attempt with its status so the user can see what happened before the final failure.
+
+## Local Cautions
+
+The same reference repos also show where ergonomic CLIs go wrong:
+
+- Do not store plaintext secrets in generic JSON stores unless the product explicitly requires that tradeoff.
+- Do not log raw `Authorization`, cookie, or token-bearing command-line arguments in diagnostics.
+- Do not prompt, spin, or wait for secret input unless stdin and stderr are attached to a terminal. `--quiet` alone is not a sufficient guard.
+- Do not print warnings to stdout when the command also supports JSON, piping, or raw output. Use stderr.
+- Do not silently pick the first matching profile when multiple profiles map to the same host. Require an explicit `--profile` or a host-default mapping.
+- Do not emulate fake subcommands with positional parsing or expose global flags that are not actually wired up.
 
 ## Design Checklist
 

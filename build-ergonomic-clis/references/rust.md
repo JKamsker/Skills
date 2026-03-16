@@ -16,6 +16,14 @@ The local references split into two good patterns:
 - `ztnet`: strong config, profile, and host-binding model
 - `fj-ex`: strong target inference and auth-stdin options
 
+## Canonical Example Assets
+
+Prefer the small examples in this skill before copying repository code directly:
+
+- [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs): shared host/profile/token resolution with canonical host keys and explicit ambiguity handling.
+- [../assets/examples/rust/clap/target_resolution.rs](../assets/examples/rust/clap/target_resolution.rs): layered `--host` / `--repo` / `--remote` / env fallback target inference inspired by `fj-ex`.
+- [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs): machine-vs-human output, `--dry-run`, `--yes`, TTY-aware prompts, raw bytes, and exit categories.
+
 ## CLI Structure
 
 Model branches with nested `Subcommand` enums and keep global flags on the top-level parser.
