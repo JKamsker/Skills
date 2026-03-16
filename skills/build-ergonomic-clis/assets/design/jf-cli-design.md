@@ -531,7 +531,7 @@ The CLI never opens a login prompt from a non-auth command. Ever.
   - moves the credential into the secret store
   - writes the new `config.json` (creates `hosts[hostnameKey]` and a `"default"` profile, and sets `defaultHost` / `defaultProfile`)
   - backs up `credentials.json` to `credentials.json.bak`
-  - emits a brief stderr note in human mode (no noisy output in machine output mode)
+  - emits a brief stderr note in human mode; in machine output mode, represent it as a `meta.warnings` item (no ad hoc stderr noise)
 
 ### `jf auth set-token`
 

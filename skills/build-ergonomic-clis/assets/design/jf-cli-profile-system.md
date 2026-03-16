@@ -624,7 +624,7 @@ If `config.json` does not exist but a legacy `credentials.json` is found in the 
 5. Set that host as `defaultHost` and `"default"` as `defaultProfile`.
 6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostnameKey}:default:{credentialKind}`.
 7. Rename `credentials.json` to `credentials.json.bak`.
-8. In human mode, print a one-line note to stderr: `Migrated credentials to new profile format. Backup: credentials.json.bak` (in `--json`, include as a `meta.warnings` item or suppress).
+8. In human mode, print a one-line note to stderr: `Migrated credentials to new profile format. Backup: credentials.json.bak` (in `--json`, include as a `meta.warnings` item; no stderr noise).
  
 No data is lost. The backup file is never read by the CLI again.
  

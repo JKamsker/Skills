@@ -156,7 +156,7 @@ If the old-format config exists and the new format does not:
 - perform an automatic one-time migration on first run
 - back up the old file (`.bak`)
 - emit a brief stderr note in human mode
-- avoid noisy output in machine modes
+- in machine output modes, represent it as a structured warning in the machine contract (avoid ad hoc stderr noise)
 
 ## Config Store vs Secret Store (recommended)
 

@@ -28,7 +28,7 @@ Use this checklist when editing this skill. Check items before considering chang
 - [ ] Machine contract examples match one of the allowed styles (envelope or direct-value) and are versioned.
 - [ ] Machine stdout is not polluted by banners/prompts/human-formatted warning lines in machine modes.
 - [ ] “Machine metadata” means structured fields inside the machine contract (e.g. an envelope `meta` section), not free-form log lines.
-- [ ] In envelope-style machine modes, avoid ad hoc stderr chatter (banners/progress/human warnings); prefer structured warnings/diagnostic paths in machine metadata when possible.
+- [ ] In envelope-style machine modes, avoid ad hoc stderr chatter (banners/progress/human warnings); represent warnings/diagnostic paths in machine metadata (e.g. `meta.warnings`).
 - [ ] Direct-value / JSONL pipeline designs keep stdout value-only under failures (errors on stderr + exit codes).
 - [ ] Service-specific guidance does not leak HTTP-only assumptions into generic guidance.
 

@@ -92,14 +92,18 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             RenderNetworkError(ex, logPath, resolved.OutputMode);
             return 8;
         }
-        catch (TaskCanceledException ex)
+        catch (OperationCanceledException ex)
         {
-            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-            RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);
-            return 8;
-        }
-        catch (OperationCanceledException)
-        {
+            // Heuristic: treat task cancellation without an external cancellation token as a timeout.
+            // In a real implementation, plumb an explicit CancellationToken to reliably distinguish
+            // user cancellation from timeouts.
+            if (ex is TaskCanceledException taskCancelled && taskCancelled.CancellationToken == default)
+            {
+                var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
+                RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);
+                return 8;
+            }
+
             RenderCliError(CliException.Cancelled("Cancelled."), resolved.OutputMode);
             return 10;
         }

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::time::Duration;
 
+use std::fmt;
 use url::Url;
 
 // This example implements the **hostname-key** target identity mode (the Jellyfin worked-example choice).
@@ -72,6 +73,14 @@ pub struct CliError {
     pub exit_code: i32,
     pub message: String,
 }
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for CliError {}
 
 impl CliError {
     pub fn usage(message: impl Into<String>) -> Self {
@@ -151,7 +160,9 @@ pub fn resolve_effective_config(
     };
 
     if explicit_profile.is_some() {
-        if let (Some(ref explicit_target_key), Some(ref profile_target_key)) = (&explicit_target_key, &profile_target_key) {
+        if let (Some(explicit_target_key), Some(profile_target_key)) =
+            (explicit_target_key.as_deref(), profile_target_key.as_deref())
+        {
             if explicit_target_key != profile_target_key {
                 return Err(CliError::usage(format!(
                     "profile '{profile}' is configured for '{profile_target_key}', but the target is '{explicit_target_key}'"
