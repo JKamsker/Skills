@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build Ergonomic CLIs"
+  short_description: "Design and implement ergonomic CLIs"
+  default_prompt: "Use $build-ergonomic-clis to design a modern, scriptable CLI with clean auth and profile UX."

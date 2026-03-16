@@ -1,0 +1,233 @@
+# Implementing a CLI in Rust
+
+## Stack
+
+For ergonomic Rust CLIs, prefer this baseline:
+
+- `clap` derive API for parsing and help
+- `serde` and `serde_json` for machine output
+- `reqwest` for HTTP
+- `thiserror` or `eyre` for error layering
+- `clap_complete` if shell completions matter
+
+The local references split into two good patterns:
+
+- `ztnet`: strong config, profile, and host-binding model
+- `fj-ex`: strong target inference and auth-stdin options
+
+## CLI Structure
+
+Model branches with nested `Subcommand` enums and keep global flags on the top-level parser.
+
+Typical layout:
+
+```text
+src/
+  main.rs
+  cli.rs
+  cli/
+    auth.rs
+    config.rs
+    domain_a.rs
+  app/
+    auth.rs
+    config.rs
+    domain_a.rs
+  config.rs
+  context.rs
+  error.rs
+  output.rs
+```
+
+Keep parsing types separate from execution logic.
+
+- `cli/*.rs`: clap structs and enums only
+- `app/*.rs`: command handlers
+- `context.rs`: resolved host, profile, token, output, retries
+- Aim for files below 300 LOC and treat 500 LOC as a hard limit.
+- If a file gets too large, split by responsibility and composition, not by creating generic helper buckets.
+
+## clap Patterns
+
+Use derive macros consistently:
+
+```rust
+#[derive(Parser, Debug)]
+pub struct Cli {
+    #[command(subcommand)]
+    pub command: Command,
+
+    #[arg(short = 'H', long, env = "TOOL_HOST")]
+    pub host: Option<String>,
+
+    #[arg(long, env = "TOOL_PROFILE")]
+    pub profile: Option<String>,
+
+    #[arg(long)]
+    pub json: bool,
+}
+```
+
+Use clap features deliberately:
+
+- `#[command(subcommand)]` for branches
+- `#[arg(env = "...")]` for env vars
+- `conflicts_with` for mutually exclusive flags
+- `requires` for dependent flags
+- `value_enum` for controlled string values
+- `value_name` to keep help readable
+
+Good examples from the local refs:
+
+- `ztnet` uses env-backed args plus nested subcommands for `auth profiles` and `auth hosts`.
+- `fj-ex` uses explicit `--latest` flags instead of treating missing identifiers as implicit latest.
+
+## Target and Profile Resolution
+
+Keep resolution in one place, not in every command.
+
+Create a context layer that resolves:
+
+- profile
+- host
+- token or session cookie
+- output format
+- retries and timeout
+- default org, repo, or network scope
+
+Recommended precedence:
+
+1. CLI flags
+2. Environment variables
+3. Config file or selected profile
+4. Hardcoded defaults
+
+For self-hosted service CLIs:
+
+- Store host defaults separately from profile definitions.
+- Canonicalize host keys before matching.
+- Only reuse stored credentials when the selected profile host matches the target host.
+
+Reference pattern:
+
+- `ztnet-cli/src/context.rs`
+
+## Auth Flows
+
+Auth should live under `auth` and remain explicit.
+
+Recommended commands:
+
+- `auth login`
+- `auth logout`
+- `auth show` or `auth status`
+- `auth set-token`
+- `auth test`
+- `auth profiles list`
+- `auth profiles use`
+- `auth hosts set-default`
+
+Rules:
+
+- Support `--stdin` or `--password-stdin` for secrets.
+- Do not prompt outside explicit auth commands.
+- If `--quiet` is active and the command would prompt, fail with an actionable error.
+- If MFA or TOTP is required, make the extra input explicit and documented.
+
+## Interactivity and Stdin
+
+Use stdin only when the user opted in or the command is clearly interactive.
+
+Good patterns:
+
+```text
+tool auth set-token --stdin
+tool auth login --password-stdin
+tool delete thing --dry-run
+tool delete thing --yes
+```
+
+Implementation tips:
+
+- Prefer `--dry-run` over `--yes` in docs and examples for mutating commands.
+- Use `std::io::Read` for full stdin reads when `--stdin` is explicit.
+- Use `rpassword` or equivalent for hidden password entry.
+- Check terminal state before prompting when possible.
+- Print prompts to stderr.
+
+Reference patterns:
+
+- `ztnet-cli/src/app/common.rs`
+- `ztnet-cli/src/app/auth.rs`
+- `forgejo-cli-ext/src/login.rs`
+
+## Output
+
+Keep one output abstraction for humans and machines.
+
+- Table or rich human output by default
+- `--json` or `--output json` for stable machine output
+- warnings and prompts on stderr
+- secret redaction in config or auth displays
+
+If the tool has a `--dry-run` mode, print the resolved request shape and exit before making network calls.
+
+## Error Handling
+
+Use domain-level errors and map them consistently at the top.
+
+Suggested categories:
+
+- usage or validation
+- auth missing
+- auth rejected
+- target resolution failed
+- network or timeout
+- not found
+- conflict
+
+Do not bury recovery instructions in debug logs. Put the recovery command in the user-facing error.
+
+## HTTP Layer
+
+Keep HTTP and parsing away from clap structs.
+
+Recommended split:
+
+- `target.rs` or `context.rs` resolves host and scope
+- `session.rs` handles cookies or auth headers
+- `client.rs` or service modules build requests
+- command handlers call service functions and format the result
+
+If the CLI infers host or repo from git remotes, keep that in a dedicated resolver and keep its precedence documented.
+
+Reference pattern:
+
+- `forgejo-cli-ext/src/target.rs`
+
+## Testing
+
+Test parsing separately from behavior.
+
+- `Cli::try_parse_from(...)` for parser tests
+- unit tests for host normalization and precedence resolution
+- unit tests for destructive-command confirmation helpers
+- integration tests for binary behavior when feasible
+- snapshot or golden tests for key help pages if the surface is large
+
+Minimum parser tests:
+
+- mutually exclusive flags
+- missing required values
+- env-var fallback
+- nested subcommand parsing
+- `--latest` style convenience remaining opt-in
+
+Minimum behavior tests:
+
+- `--dry-run` preview path
+- `--quiet` refusing to prompt
+- `--stdin` secret input path
+- host/profile mismatch
+- JSON output contract
+- destructive command with and without `--yes`
