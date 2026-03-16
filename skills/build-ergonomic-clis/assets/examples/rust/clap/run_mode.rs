@@ -6,7 +6,9 @@ use serde_json::Value;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
     Table,
+    /// Machine output (JSON, pretty-printed).
     Json,
+    /// Machine output (JSON, compact). Not raw bytes; see `write_raw_bytes`.
     Raw,
 }
 
@@ -69,7 +71,8 @@ pub fn confirm_or_abort(
     if matches!(mode.output, OutputFormat::Json | OutputFormat::Raw) {
         return Err(CliError {
             exit: ExitCategory::Usage,
-            message: "confirmation required. Re-run with --yes or --dry-run. Prompts are disabled in machine output modes."
+            message:
+                "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes (for example: --json)."
                 .to_string(),
         });
     }
@@ -78,7 +81,7 @@ pub fn confirm_or_abort(
         return Err(CliError {
             // Interaction-required refusal (quiet / non-TTY) is exit 2, not exit 10.
             exit: ExitCategory::Usage,
-            message: "confirmation required. Re-run with --yes or --dry-run.".to_string(),
+            message: "Confirmation required. Use --yes to confirm or --dry-run to preview.".to_string(),
         });
     }
 
@@ -98,6 +101,7 @@ pub fn confirm_or_abort(
 }
 
 pub fn write_value<T: Serialize>(value: &T, format: OutputFormat) -> Result<(), CliError> {
+    // For product CLIs, ensure machine output is explicitly versioned (see references/cli-patterns.md).
     match format {
         OutputFormat::Json => {
             println!("{}", serde_json::to_string_pretty(value).map_err(json_error)?);

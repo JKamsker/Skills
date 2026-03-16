@@ -26,14 +26,14 @@
 
 > **Related documents:** For the broader CLI design (command tree, output modes, exit codes), see [`jf-cli-design.md`](jf-cli-design.md). For generic self-hosted service patterns (target identity modes, inference, migration, diagnostics), see [`../../references/service-cli-patterns.md`](../../references/service-cli-patterns.md).
  
-The profile system allows the CLI to manage credentials for multiple Jellyfin servers and multiple accounts per server. Profiles are organized by hostname, with a two-level resolution chain: first resolve the host, then resolve the profile within that host.
+The profile system allows the CLI to manage credentials for multiple Jellyfin servers and multiple accounts per server. Profiles are organized by hostname key (lowercased hostname), with a two-level resolution chain: first resolve the host, then resolve the profile within that host.
  
 ### Design Principles
  
 - **Hostname-keyed**: Hosts are identified by their network hostname (e.g. `nas.local`, `jf.home.example.com`). This provides short, human-readable identifiers.
 - **Base URL inheritance**: Each host declares a `baseUrl`. Profiles inherit it by default but may override it (e.g. different port or path on the same hostname).
 - **Profile names are unique per host, not globally**. Two hosts may each have a profile named `admin`.
-- **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname + profile.
+- **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname key (lowercased hostname) + profile.
 - **Zero-config default**: A single server with a single profile requires no flags or env vars — it just works.
 - **Optional hostname aliases**: Each host may declare short aliases (e.g. `home`, `nas`). Aliases are not globally unique — multiple hosts may share an alias — but the CLI warns on ambiguity.
  
@@ -52,14 +52,14 @@ The profile system allows the CLI to manage credentials for multiple Jellyfin se
 Overridable with `--config <path>` or `JF_CONFIG` env var.
  
 ### Schema
- 
+
 ```jsonc
 {
-  // Hostname of the default server. Must be a key in "hosts".
-  "defaultHost": "<hostname>",
- 
+  // Hostname key (lowercased hostname) of the default server. Must be a key in "hosts".
+  "defaultHost": "<hostnameKey>",
+
   "hosts": {
-    "<hostname>": {
+    "<hostnameKey>": {
       // Full URL used to connect to this server.
       // All profiles under this host inherit this unless they override it.
       "baseUrl": "<url>",
@@ -129,7 +129,7 @@ Legacy note: `credentials.json` is treated as a legacy format to migrate away fr
       }
     },
     "nas.local": {
-      "baseUrl": "https://nas.local:8096/jellyfin",
+      "baseUrl": "http://nas.local:8096/jellyfin",
       "aliases": ["nas"],
       "defaultProfile": "admin",
       "profiles": {
@@ -138,7 +138,7 @@ Legacy note: `credentials.json` is treated as a legacy format to migrate away fr
           "authKind": "token"
         },
         "legacy": {
-          "baseUrl": "http://nas.local:8920",
+          "baseUrl": "https://nas.local:8920",
           "user": "admin",
           "authKind": "token"
         }
@@ -152,8 +152,8 @@ Legacy note: `credentials.json` is treated as a legacy format to migrate away fr
  
 | Field | Required | Description |
 |-------|----------|-------------|
-| `defaultHost` | No | Hostname of the default server. If absent, requires explicit `--server` or `JF_SERVER`. |
-| `hosts` | Yes | Map of hostname → host object. |
+| `defaultHost` | No | Hostname key of the default server. If absent and multiple hosts exist, requires explicit `--server` or `JF_SERVER` (single-host inference still applies). |
+| `hosts` | Yes | Map of hostname key (lowercased hostname) → host object. |
 | `hosts[].baseUrl` | Yes | Default base URL for all profiles under this host. |
 | `hosts[].aliases` | No | List of short aliases for this host. Non-unique across hosts. Used during host lookup. |
 | `hosts[].defaultProfile` | No | Default profile name for this host. If absent: inferred if there is exactly one profile, otherwise error. |
@@ -254,7 +254,7 @@ When `--server` or `JF_SERVER` provides a full URL, the hostname is extracted fo
 | Input | Extracted Hostname |
 |-------|--------------------|
 | `https://jf.home.example.com` | `jf.home.example.com` |
-| `https://nas.local:8096/jellyfin` | `nas.local` |
+| `http://nas.local:8096/jellyfin` | `nas.local` |
 | `http://192.168.1.50:8096` | `192.168.1.50` |
 | `nas.local` (bare) | `nas.local` |
  
@@ -262,7 +262,7 @@ Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent).
 
 Port and path are **not** part of the hostname key. They are preserved only in `baseUrl`.
 
-**Note:** Scheme-less `host:port` inputs (e.g. `nas.local:8096`) are treated as a full URL by first adding a default scheme (e.g. `https://nas.local:8096`) before extracting the hostname. This keeps the hostname key host-only while still allowing ports in the runtime base URL.
+**Note:** Scheme-less `host:port` inputs (e.g. `nas.local:8096`) are treated as a full URL by first adding a default scheme (e.g. `http://nas.local:8096`) before extracting the hostname. This keeps the hostname key host-only while still allowing ports in the runtime base URL.
 
 ### Exact normalization rules (hostname-key identity)
 
@@ -335,7 +335,7 @@ jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--server` | Yes (for first login) | Server URL (or scheme-less `host:port`) when creating a new host entry. For existing hosts, this flag may also be a bare hostname or alias (uses stored `baseUrl` unless a full URL is supplied as an invocation-only override). |
+| `--server` | Yes (for first login) | Server URL (or scheme-less `host:port`) when creating a new host entry. For existing hosts, this flag may also be a bare hostname or alias (uses stored `baseUrl` unless a full URL is supplied for login; if it differs, it may be saved as a profile-level `baseUrl` override). |
 | `--profile` | No | Profile name. Default: for existing hosts, follows standard profile resolution (§3.2). When creating a new host entry, prompts in human mode when a TTY is present; otherwise uses `"default"` (including in machine output modes). |
 | `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. Required in `--json` mode (no prompts). |
 | `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login (no prompts). |
@@ -345,7 +345,7 @@ jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-
 
 1. Resolve the server input using standard host resolution (§3.1). If a full URL (or scheme-less `host:port`) was provided, extract the hostname for the hostname key.
 2. Perform the selected auth flow (password-based or quick-connect) and obtain an access token (see `jf-cli-design.md` for the detailed interaction contract).
-3. Create or update `hosts[hostname]`:
+3. Create or update `hosts[hostnameKey]`:
    - Set `baseUrl` on the host if this is a new host entry.
    - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
    - Store the credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (where `credentialKind` is `profile.authKind`).
@@ -360,7 +360,7 @@ jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-
 Best-effort revoke and remove the stored credential for a profile.
 
 ```
-jf auth logout [--server <host>] [--profile <name>]
+jf auth logout [--server <value>] [--profile <name>]
 ```
 
 Resolves host and profile via standard resolution (§3). Removes the stored credential from the secret store. If the profile uses token auth and the server supports revocation, performs a best-effort server-side revoke. For API keys, use `jf auth api-keys delete` to revoke server-side.
@@ -374,7 +374,7 @@ This command does not remove the profile metadata from config. Use `jf auth prof
 List all hosts and their profiles.
  
 ```
-jf auth profiles list [--server <host>]
+jf auth profiles list [--server <value>]
 ```
  
 Without `--server`: lists all hosts and all profiles. With `--server`: lists profiles for that host only.
@@ -402,7 +402,7 @@ nas.local
 Show profile details.
   
 ```
-jf auth profiles show [<name>] [--server <host>]
+jf auth profiles show [<name>] [--server <value>]
 ```
   
 Without `<name>`, resolves the host and profile via standard resolution and prints the effective host, profile name, base URL, username, and auth method. Useful for debugging which profile a command would use.
@@ -414,7 +414,7 @@ With `<name>`, resolves the host via standard resolution and then prints the nam
 ```
 Host:     nas.local
 Profile:  admin
-Base URL: https://nas.local:8096/jellyfin
+Base URL: http://nas.local:8096/jellyfin
 Username: admin
 Auth:     token (stored in secret store)
 ```
@@ -430,7 +430,7 @@ Auth:     token (from JF_TOKEN override)
 Set the default profile for a host.
  
 ```
-jf auth profiles use <name> [--server <host>]
+jf auth profiles use <name> [--server <value>]
 ```
  
 Resolves the host via standard resolution (§3.1). Sets `defaultProfile` for that host to `<name>`. Errors if the profile does not exist on that host.
@@ -440,7 +440,7 @@ Resolves the host via standard resolution (§3.1). Sets `defaultProfile` for tha
 Rename a profile.
  
 ```
-jf auth profiles rename <old> <new> [--server <host>]
+jf auth profiles rename <old> <new> [--server <value>]
 ```
  
 Resolves the host. Renames the profile key. Updates `defaultProfile` if it pointed to the old name. Errors if `<new>` already exists on that host.
@@ -450,7 +450,7 @@ Resolves the host. Renames the profile key. Updates `defaultProfile` if it point
 Remove a profile without revoking the token server-side.
  
 ```
-jf auth profiles delete <name> [--server <host>]
+jf auth profiles delete <name> [--server <value>]
 ```
  
 Resolves the host. Removes the profile. If it was `defaultProfile`, clears `defaultProfile` (next resolution will require explicit selection or fall through to single-profile inference). If it was the last profile, removes the host entry.
@@ -469,7 +469,7 @@ jf auth host list
  
 ```
 * jf.home.example.com  https://jf.home.example.com       (2 profiles)  [home, jf]
-  nas.local             https://nas.local:8096/jellyfin    (2 profiles)  [nas]
+  nas.local             http://nas.local:8096/jellyfin     (2 profiles)  [nas]
 ```
  
 Aliases column is omitted if no host has any aliases.

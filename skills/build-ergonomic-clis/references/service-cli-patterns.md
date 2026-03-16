@@ -21,6 +21,7 @@ For browser-capable service CLIs:
 - Prefer system browser plus PKCE or a service-native device/quick-connect flow.
 - Fall back to pasted tokens only when the service actually uses them.
 - In resolved machine output modes (selected via flags/env/config/profile defaults; for example: `--json`, `--output json`, `--porcelain=v1`), never auto-launch a browser or show interactive prompts. If auth would require user interaction (browser/device/quick-connect), refuse (exit `2`) and require a truly non-interactive alternative (for example: token via stdin) or instruct re-running in human mode (for example: pass `--output human` / `--no-json`, or unset the output env var).
+- Treat `--output human` / `--no-json` as mutually exclusive with machine selectors (`--json`, `--output json`, porcelain selectors). If combined, refuse (exit `2`) with an actionable error.
 
 For API-token-based CLIs:
 
@@ -140,7 +141,7 @@ If you support aliases (e.g. `home`, `prod`), define:
 Warning routing:
 
 - Envelope-style machine modes: represent ambiguity warnings in machine metadata (e.g. `meta.warnings`).
-- Direct-value/pipeline modes: represent ambiguity warnings on stderr (keep stdout value-only).
+- Direct-value/pipeline machine modes: represent ambiguity warnings on stderr (keep stdout value-only).
 
 ### Single-entry inference
 

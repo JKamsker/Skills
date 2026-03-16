@@ -71,9 +71,9 @@ Reserve consistent flags and branches for consistent jobs.
 - `-h`, `--help`: help
 - `-V`, `--version` or `-v` only if your framework already owns it consistently
 - `--dry-run`: preview a mutating operation without side effects; prefer this as the primary safety flag
-- `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect
+- `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect; for destructive commands this is also the explicit consent required in non-interactive contexts
 - `--json` or `--output json`: stable machine output (selects the default stable version, currently v1)
-- `--output human` (or `--no-json`): force human output and override env/config/profile output defaults
+- `--output human` (or `--no-json`): force human output (behavioral mode) and override env/config/profile output defaults (prompts/browser flows are allowed only with a TTY; still suppressed by `--quiet`)
 - `--verbose` or `-v`: increase output detail; repeat for more (`-vv`, `-vvv`) if the tool has multiple verbosity tiers
 - `--no-color`: disable ANSI formatting; also respect the `NO_COLOR` environment variable (see https://no-color.org/)
 - `--quiet`: suppress human-oriented banners, status chatter, and prompts
@@ -224,7 +224,13 @@ Treat human and machine output as separate contracts.
 - Redact secrets in human output and config dumps.
 - Use explicit exit codes for common failure classes.
 
-Machine mode is determined by the **resolved output mode** (including env/config overrides), not just by whether a user typed `--json`.
+Machine mode is determined by the **resolved output mode** (including env/config/profile defaults), not just by whether a user typed `--json`.
+
+Output resolution precedence (recommended):
+
+- Output flags/selectors (`--output …`, `--json`, `--porcelain=…`) win over env/config/profile defaults.
+- Env vars win over config/profile defaults.
+- If multiple output selectors conflict (e.g. `--output human` plus `--json`), refuse (exit `2`) with an actionable message.
 
 ### Base exit codes (all CLI classes)
 
@@ -275,7 +281,7 @@ Define `--quiet` precisely:
 - Never turns a failure into a success. If the command would prompt, it must refuse (exit `2`) unless the user passed `--yes` or `--dry-run`.
 - Does not suppress primary command output (tables/value output) unless the command explicitly documents that it is safe to do so.
 - In human output modes, suppresses warnings unless they affect correctness (for example: partial results, ambiguous target selection, or a fallback that changes which resource is acted on).
-- In machine output modes, do not change the machine contract payload; warnings remain represented where the contract expects them (for example: `meta.warnings` in an envelope contract).
+- In machine output modes, do not change the machine contract payload; warnings remain represented where the contract expects them (for example: envelope/porcelain metadata such as `meta.warnings`; for direct-value/pipeline commands without metadata, use stderr while keeping stdout value-only).
 - Suppresses "diagnostic log saved to ..." hints; the log file may still be written.
 - May still write diagnostic artifacts according to policy.
 

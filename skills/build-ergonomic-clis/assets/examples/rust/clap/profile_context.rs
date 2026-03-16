@@ -203,11 +203,11 @@ pub fn resolve_effective_config(
         AuthSource::None
     };
 
-    let output = if global.json {
-        OutputFormat::Json
-    } else {
-        global.output.or(profile_cfg.output).unwrap_or(OutputFormat::Table)
-    };
+    let output = global
+        .output
+        .or_else(|| global.json.then_some(OutputFormat::Json))
+        .or(profile_cfg.output)
+        .unwrap_or(OutputFormat::Table);
 
     Ok(EffectiveConfig {
         profile,
@@ -343,10 +343,11 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
         && !trimmed.contains('?')
         && !trimmed.contains('#')
         && trimmed.contains(':')
-        && trimmed.parse::<std::net::Ipv6Addr>().is_ok()
     {
-        // Allow bare IPv6 hostnames without brackets (identity keys are host-only).
-        return Ok(trimmed.to_ascii_lowercase());
+        if let Ok(ip) = trimmed.parse::<std::net::Ipv6Addr>() {
+            // Allow bare IPv6 hostnames without brackets (identity keys are host-only).
+            return Ok(ip.to_string());
+        }
     }
 
     let looks_like_windows_path = trimmed.starts_with(r"\\")

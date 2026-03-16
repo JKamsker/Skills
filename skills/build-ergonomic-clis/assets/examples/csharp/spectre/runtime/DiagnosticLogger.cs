@@ -4,15 +4,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace ExampleCli.Runtime;
 
 public sealed class DiagnosticLogger
 {
-    private static readonly Regex JwtPattern = new(@"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])", RegexOptions.Compiled);
-    private static readonly Regex SecretParamPattern = new(@"\b(?<key>token|access[-_]?token|refresh[-_]?token|id[-_]?token|api[-_]?key|client[-_]?secret|password|secret)=(?<value>[^&\s]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
     public string? TryWrite(
         ResolvedContextSafe context,
         string operation,
@@ -36,17 +32,17 @@ public sealed class DiagnosticLogger
             var builder = new StringBuilder();
             builder.AppendLine($"Timestamp: {DateTimeOffset.UtcNow:O}");
             builder.AppendLine($"Operation: {operation}");
-            builder.AppendLine($"BaseUrl: {RedactPotentialSecrets(context.BaseUrl)}");
+            builder.AppendLine($"BaseUrl: {SecretRedactor.RedactPotentialSecrets(context.BaseUrl)}");
             builder.AppendLine($"TargetIdentityKey: {context.TargetIdentityKey}");
             builder.AppendLine($"Profile: {context.Profile}");
             builder.AppendLine($"AuthSource: {context.AuthSource}");
             builder.AppendLine($"Exception: {exception.GetType().FullName}");
-            builder.AppendLine($"Message: {RedactPotentialSecrets(exception.Message)}");
+            builder.AppendLine($"Message: {SecretRedactor.RedactPotentialSecrets(exception.Message)}");
 
             if (request is not null)
             {
                 builder.AppendLine();
-                builder.AppendLine($"Request: {request.Method} {RedactPotentialSecrets(SanitizeUri(request.RequestUri) ?? "(unknown)")}");
+                builder.AppendLine($"Request: {request.Method} {SecretRedactor.RedactPotentialSecrets(SanitizeUri(request.RequestUri) ?? "(unknown)")}");
                 builder.AppendLine(RedactHeaders(request.Headers));
                 if (request.Content is not null)
                     builder.AppendLine(RedactHeaders(request.Content.Headers));
@@ -89,7 +85,7 @@ public sealed class DiagnosticLogger
             builder.AppendLine($"Timestamp: {DateTimeOffset.UtcNow:O}");
             builder.AppendLine($"Operation: {operation}");
             builder.AppendLine($"Exception: {exception.GetType().FullName}");
-            builder.AppendLine($"Message: {RedactPotentialSecrets(exception.Message)}");
+            builder.AppendLine($"Message: {SecretRedactor.RedactPotentialSecrets(exception.Message)}");
 
             File.WriteAllText(path, builder.ToString());
             return path;
@@ -113,6 +109,8 @@ public sealed class DiagnosticLogger
                 || keyLower.Contains("token")
                 || keyLower.Contains("secret")
                 || keyLower.Contains("password")
+                || keyLower.Contains("signature")
+                || keyLower.Contains("credential")
                 || keyLower.Contains("apikey")
                 || keyLower.Contains("api-key");
 
@@ -129,28 +127,12 @@ public sealed class DiagnosticLogger
             isSensitive |= looksSensitiveByName;
 
             var rawValue = string.Join(", ", header.Value);
-            var value = isSensitive ? "REDACTED" : RedactPotentialSecrets(rawValue);
+            var value = isSensitive ? "REDACTED" : SecretRedactor.RedactPotentialSecrets(rawValue);
 
             lines.Add($"{header.Key}: {value}");
         }
 
         return string.Join(Environment.NewLine, lines);
-    }
-
-    private static string RedactPotentialSecrets(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return value;
-
-        value = JwtPattern.Replace(value, "REDACTED_JWT");
-        value = SecretParamPattern.Replace(value, match => $"{match.Groups["key"].Value}=REDACTED");
-        value = Regex.Replace(value, @"\bBearer\s+[A-Za-z0-9._~+\-/=]+\b", "Bearer REDACTED", RegexOptions.IgnoreCase);
-        value = Regex.Replace(
-            value,
-            "\"(?<key>token|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|apiKey|api_key|apikey|clientSecret|client_secret|password|secret)\"\\s*:\\s*\"(?<value>[^\"]+)\"",
-            match => $"\"{match.Groups["key"].Value}\":\"REDACTED\"",
-            RegexOptions.IgnoreCase);
-        return value;
     }
 
     private static string? SanitizeUri(Uri? uri)

@@ -330,10 +330,15 @@ fn parse_remote_url(raw: &str) -> Result<Url, CliError> {
     };
 
     let (host, path) = split_scp_host_and_path(host_and_path)?;
+    let host = if !host.starts_with('[') && host.parse::<std::net::Ipv6Addr>().is_ok() {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
 
     let mut rewritten = String::from("ssh://");
     rewritten.push_str(&user_prefix);
-    rewritten.push_str(host);
+    rewritten.push_str(&host);
     rewritten.push('/');
     rewritten.push_str(path);
 

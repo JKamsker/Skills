@@ -71,7 +71,7 @@ Verbs at the leaves are drawn from a small, repeated set:
 jf
  |
  |-- auth                          Authentication, identity, and profiles
- |    |-- login                    Authenticate by username/password (returns token)
+ |    |-- login                    Authenticate by username/password (stores credential)
  |    |-- login --quick-connect    Authenticate via Quick Connect flow
  |    |-- logout                   Best-effort revoke and remove stored credential
  |    |-- status                   Show current auth state (user, server, token expiry)
@@ -388,7 +388,7 @@ These flags are available on every command via `GlobalSettings`:
 | Flag | Short | Type | Description |
 |---|---|---|---|
 | `--server <value>` | `-S` | string | Hostname, alias, scheme-less `host:port`, or full URL of the target Jellyfin server |
-| `--profile <NAME>` | | string | Use a specific saved profile |
+| `--profile <NAME>` | | string | Use a named profile on the resolved host (host-scoped; not globally unique) |
 | `--config <path>` | | string | Path to config file (overrides default location) |
 | `--json` | | bool | Output stable machine-readable JSON to stdout |
 | `--no-color` | | bool | Disable ANSI color/formatting (also respects `NO_COLOR` env var) |
@@ -562,7 +562,7 @@ Resolution is a two-step process: resolve the host, then resolve the profile wit
 
 Bare value lookup order: exact match against `hosts` keys first, then alias scan. Multiple alias matches → warn and use first (config file order).
 
-Scheme-less `host:port` inputs (e.g. `nas.local:8096`) are treated like a full URL by first adding a default scheme (e.g. `https://nas.local:8096`) before extracting the hostname.
+Scheme-less `host:port` inputs (e.g. `nas.local:8096`) are treated like a full URL by first adding a default scheme (e.g. `http://nas.local:8096`) before extracting the hostname.
 
 ### Profile resolution
 
@@ -612,7 +612,7 @@ Override with `--config <path>` or `JF_CONFIG` env var.
       }
     },
     "nas.local": {
-      "baseUrl": "https://nas.local:8096/jellyfin",
+      "baseUrl": "http://nas.local:8096/jellyfin",
       "aliases": ["nas"],
       "defaultProfile": "admin",
       "profiles": {
@@ -664,7 +664,7 @@ These flags are reserved across the entire CLI and must not be repurposed by ind
 | `-q`, `--quiet` | Suppress banners and prompts; fail if confirmation needed |
 | `--no-color` | Disable ANSI formatting |
 | `-S`, `--server` | Target server (hostname, alias, scheme-less `host:port`, or full URL) |
-| `--profile` | Named profile |
+| `--profile` | Profile name on the resolved host |
 | `--config` | Config file path |
 
 Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--type`,
@@ -991,7 +991,7 @@ src/Jf.Cli/
         ApiKeysCreateCommand.cs
         ApiKeysDeleteCommand.cs
       AuthService.cs                   # Login flows, token validation
-      ConfigStore.cs                   # Unified config with host-keyed profiles
+      ConfigStore.cs                   # Unified config with hostname-keyed profiles
     Server/
       InfoCommand.cs
       PingCommand.cs
