@@ -459,8 +459,8 @@ Jellyfin supports three authentication paths:
 ### Auth commands
 
 ```
-jf auth login --server <SERVER> [--profile <NAME>] [--username <USER>] [--password-stdin] [--quick-connect]
-jf auth logout
+jf auth login [--server <VALUE>] [--profile <NAME>] [--username <USER>] [--password-stdin] [--quick-connect]
+jf auth logout [--server <VALUE>] [--profile <NAME>]
 jf auth status
 jf auth whoami
 jf auth set-token <TOKEN> [--stdin] [--no-validate]
@@ -473,7 +473,7 @@ jf auth profiles delete <name>
 jf auth host list
 jf auth host use <hostname>
 jf auth host rename <old> <new>
-jf auth host delete <hostname>
+jf auth host delete <hostname> [--yes] [--dry-run]
 jf auth host alias add <hostname> <alias>
 jf auth host alias remove <hostname> <alias>
 jf auth host alias list [<hostname>]
@@ -500,7 +500,7 @@ jf auth api-keys delete <key>
     d. If TTY present and no `--password-stdin`, prompt for password on stderr with no-echo.
     e. If no TTY and no `--password-stdin`, fail: `Password required. Use --password-stdin or run interactively.`
     f. POST /Users/AuthenticateByName with username and password.
-    g. Store the returned credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (hostname-key identity + profile name + credential kind).
+    g. Store the returned credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (hostname key + profile name + credential kind).
 4. Save or update a profile entry in config.
 5. In human output modes, print the username and server on stderr to confirm. In `--json` mode, include these as structured metadata in the JSON envelope (avoid ad hoc stderr noise).
 
@@ -522,7 +522,7 @@ The CLI never opens a login prompt from a non-auth command. Ever.
 
 - Non-secret profile metadata lives in `config.json`.
 - Credentials (tokens, API keys) are stored in a separate secret store (OS credential store / keyring / external helper), keyed by:
-  - hostname identity key (lowercased hostname)
+  - hostname key (lowercased hostname)
   - profile name (within that host)
   - credential kind (`token` or `apiKey`)
 - Fallback (allowed but discouraged): a separate secrets file with strict permissions and explicit redaction rules. Do not inline secrets in `config.json`.

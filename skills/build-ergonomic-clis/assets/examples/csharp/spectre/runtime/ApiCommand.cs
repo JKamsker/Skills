@@ -74,13 +74,13 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         catch (Exception ex)
         {
             var logPath = _diagnosticLogger.TryWrite(context.Name, ex);
-            RenderUnexpectedError(ex, logPath, outputMode);
+            RenderUnexpectedError(ex, logPath, outputMode, settings.Quiet);
             return 1;
         }
 
         try
         {
-            return await ExecuteAsync(context, settings, resolved, cancellationToken);
+            return await ExecuteCoreAsync(context, settings, resolved, cancellationToken);
         }
         catch (CliException ex)
         {
@@ -90,7 +90,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         catch (HttpRequestException ex)
         {
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-            RenderNetworkError(ex, logPath, resolved.OutputMode, settings.Verbose);
+            RenderNetworkError(ex, logPath, resolved.OutputMode, settings.Verbose, settings.Quiet);
             return 8;
         }
         catch (OperationCanceledException ex)
@@ -102,18 +102,18 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             }
 
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-            RenderNetworkError(new HttpRequestException("Request cancelled or timed out.", ex), logPath, resolved.OutputMode, settings.Verbose);
+            RenderNetworkError(new HttpRequestException("Request cancelled or timed out.", ex), logPath, resolved.OutputMode, settings.Verbose, settings.Quiet);
             return 8;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-            RenderUnexpectedError(ex, logPath, resolved.OutputMode);
+            RenderUnexpectedError(ex, logPath, resolved.OutputMode, settings.Quiet);
             return 1;
         }
     }
 
-    protected abstract Task<int> ExecuteAsync(
+    protected abstract Task<int> ExecuteCoreAsync(
         CommandContext context,
         TSettings settings,
         ResolvedContext resolved,
@@ -139,7 +139,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             Console.Error.WriteLine($"Try: {SecretRedactor.RedactPotentialSecrets(ex.RecoveryCommand)}");
     }
 
-    private static void RenderNetworkError(HttpRequestException ex, string? logPath, OutputMode outputMode, bool verbose)
+    private static void RenderNetworkError(HttpRequestException ex, string? logPath, OutputMode outputMode, bool verbose, bool quiet)
     {
         if (outputMode == OutputMode.Json)
         {
@@ -149,18 +149,18 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 Error: new JsonError(
                     Kind: "network",
                     Message: "Network error."),
-                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPath(logPath))));
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPathForJson(logPath))));
             return;
         }
 
         Console.Error.WriteLine("Network error.");
-        if (verbose)
+        if (!quiet && verbose)
             Console.Error.WriteLine($"Details: {SecretRedactor.RedactPotentialSecrets(ex.Message)}");
-        if (!string.IsNullOrWhiteSpace(logPath))
-            Console.Error.WriteLine($"Diagnostic log: {SanitizeLogPath(logPath)}");
+        if (!quiet && !string.IsNullOrWhiteSpace(logPath))
+            Console.Error.WriteLine($"Diagnostic log: {logPath}");
     }
 
-    private static void RenderUnexpectedError(Exception ex, string? logPath, OutputMode outputMode)
+    private static void RenderUnexpectedError(Exception ex, string? logPath, OutputMode outputMode, bool quiet)
     {
         if (outputMode == OutputMode.Json)
         {
@@ -170,13 +170,13 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 Error: new JsonError(
                     Kind: "unexpected",
                     Message: "Unexpected error."),
-                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPath(logPath))));
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPathForJson(logPath))));
             return;
         }
 
         Console.Error.WriteLine("Unexpected client error.");
-        if (!string.IsNullOrWhiteSpace(logPath))
-            Console.Error.WriteLine($"Diagnostic log: {SanitizeLogPath(logPath)}");
+        if (!quiet && !string.IsNullOrWhiteSpace(logPath))
+            Console.Error.WriteLine($"Diagnostic log: {logPath}");
     }
 
     private static string KindForExitCode(int exitCode)
@@ -184,7 +184,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         return exitCode switch
         {
             1 => "unexpected",
-            2 => "usage",
+            2 => "refused",
             3 => "not_authenticated",
             4 => "not_authorized",
             5 => "not_found",
@@ -207,7 +207,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         Console.Out.WriteLine(JsonSerializer.Serialize(envelope, options));
     }
 
-    private static string? SanitizeLogPath(string? path)
+    private static string? SanitizeLogPathForJson(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
             return null;

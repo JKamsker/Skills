@@ -203,6 +203,17 @@ pub fn resolve_effective_config(
         AuthSource::None
     };
 
+    if global.json {
+        if let Some(output) = global.output {
+            if output != OutputFormat::Json {
+                return Err(CliError::usage(
+                    "conflicting output selectors: --json cannot be combined with --output table. Choose one."
+                        .to_string(),
+                ));
+            }
+        }
+    }
+
     let output = global
         .output
         .or_else(|| global.json.then_some(OutputFormat::Json))

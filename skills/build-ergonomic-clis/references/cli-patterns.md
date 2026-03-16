@@ -73,7 +73,7 @@ Reserve consistent flags and branches for consistent jobs.
 - `--dry-run`: preview a mutating operation without side effects; prefer this as the primary safety flag
 - `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect; for destructive commands this is also the explicit consent required in non-interactive contexts
 - `--json` or `--output json`: stable machine output (selects the default stable version, currently v1)
-- `--output human` (or `--no-json`): force human output (behavioral mode) and override env/config/profile output defaults (prompts/browser flows are allowed only with a TTY; still suppressed by `--quiet`)
+- `--output human` (or `--no-json`): force human output (behavioral mode) and override env/config/profile output defaults (prompts/browser flows are allowed only when stdin and stderr are TTYs; still suppressed by `--quiet`)
 - `--verbose` or `-v`: increase output detail; repeat for more (`-vv`, `-vvv`) if the tool has multiple verbosity tiers
 - `--no-color`: disable ANSI formatting; also respect the `NO_COLOR` environment variable (see https://no-color.org/)
 - `--quiet`: suppress human-oriented banners, status chatter, and prompts
@@ -117,7 +117,9 @@ Bad patterns:
 Rules:
 
 - When the **resolved output mode** is a machine output mode (selected via `--json`, `--output json`, porcelain selectors, or env/config/profile defaults), the CLI is non-interactive: no prompts, no browser launches, no banners.
-- If a prompt is required and the tool is in `--quiet` mode, fail (exit `2`) and tell the user to pass the missing flag, use `--dry-run` to inspect first, or use `--yes` only when bypassing a destructive confirmation is intentional.
+- If an interactive step would be required but the tool is in `--quiet` mode, fail (exit `2`) with an actionable message:
+  - For destructive confirmation prompts: suggest `--dry-run` to inspect first or `--yes` to explicitly confirm.
+  - For other interactive prompts (auth/device/browser/selection): suggest the explicit non-interactive alternative (stdin/device/token flag) or re-running in human mode.
 - If a command supports interactive prompts, only do so when stdin and stderr are TTYs. If a prompt would be required but a TTY is not available, refuse (exit `2`) with an actionable message.
 - Prompt on stderr, not stdout.
 - Secret prompts must not echo.
@@ -228,9 +230,10 @@ Machine mode is determined by the **resolved output mode** (including env/config
 
 Output resolution precedence (recommended):
 
-- Output flags/selectors (`--output …`, `--json`, `--porcelain=…`) win over env/config/profile defaults.
+- Output flags/selectors (`--output …`, `--json`, `--porcelain=…`, `--format-version …`) win over env/config/profile defaults.
 - Env vars win over config/profile defaults.
-- If multiple output selectors conflict (e.g. `--output human` plus `--json`), refuse (exit `2`) with an actionable message.
+- If multiple explicit selectors conflict (e.g. `--output human` plus `--porcelain=v1`, or `--format-version 1` plus `--output json-v1`), refuse (exit `2`) with an actionable message.
+- If `--json` is combined with an explicit selector (`--porcelain=v1`, `--format-version 1`, `--output json-v1`), the explicit selector wins.
 
 ### Base exit codes (all CLI classes)
 
@@ -277,8 +280,9 @@ Define `--quiet` precisely:
 
 - Suppresses non-essential human-facing output (status chatter, banners, progress).
 - Suppresses prompts (never blocks waiting for interaction).
+- Disables interactive flows like browser/device login. If such a flow would be required, refuse (exit `2`) with a non-interactive alternative or an instruction to re-run in human mode.
 - Never suppresses machine stdout.
-- Never turns a failure into a success. If the command would prompt, it must refuse (exit `2`) unless the user passed `--yes` or `--dry-run`.
+- Never turns a failure into a success. If the command would require user input, it must refuse (exit `2`). `--yes` only bypasses destructive confirmation prompts; `--dry-run` avoids destructive prompts by previewing.
 - Does not suppress primary command output (tables/value output) unless the command explicitly documents that it is safe to do so.
 - In human output modes, suppresses warnings unless they affect correctness (for example: partial results, ambiguous target selection, or a fallback that changes which resource is acted on).
 - In machine output modes, do not change the machine contract payload; warnings remain represented where the contract expects them (for example: envelope/porcelain metadata such as `meta.warnings`; for direct-value/pipeline commands without metadata, use stderr while keeping stdout value-only).

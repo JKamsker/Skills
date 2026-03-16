@@ -20,7 +20,8 @@ For browser-capable service CLIs:
 
 - Prefer system browser plus PKCE or a service-native device/quick-connect flow.
 - Fall back to pasted tokens only when the service actually uses them.
-- In resolved machine output modes (selected via flags/env/config/profile defaults; for example: `--json`, `--output json`, `--porcelain=v1`), never auto-launch a browser or show interactive prompts. If auth would require user interaction (browser/device/quick-connect), refuse (exit `2`) and require a truly non-interactive alternative (for example: token via stdin) or instruct re-running in human mode (for example: pass `--output human` / `--no-json`, or unset the output env var).
+- In resolved machine output modes (selected via flags/env/config/profile defaults; for example: `--json`, `--output json`, `--porcelain=v1`), never auto-launch a browser or show interactive prompts. If auth would require user interaction (browser/device/quick-connect), refuse (exit `2`) and require a truly non-interactive alternative (for example: token via stdin) or instruct re-running in human mode (for example: pass `--output human` / `--no-json`, ensure stdin and stderr are TTYs, and remove `--quiet`; note that env/config/profile defaults may still force machine output unless overridden by flags).
+- Treat `--quiet` as non-interactive even in human output modes: never initiate browser/device/quick-connect flows when `--quiet` is set. Refuse (exit `2`) with a non-interactive alternative or an instruction to re-run without `--quiet`.
 - Treat `--output human` / `--no-json` as mutually exclusive with machine selectors (`--json`, `--output json`, porcelain selectors). If combined, refuse (exit `2`) with an actionable error.
 
 For API-token-based CLIs:

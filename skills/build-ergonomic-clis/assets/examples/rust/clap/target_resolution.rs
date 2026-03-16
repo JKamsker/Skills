@@ -360,22 +360,9 @@ fn split_scp_host_and_path(raw: &str) -> Result<(&str, &str), CliError> {
         }
         end + 1
     } else {
-        let first = trimmed
+        trimmed
             .find(':')
-            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?;
-
-        let after = trimmed[first + 1..].trim_start();
-        let looks_like_windows_drive_path = after.len() >= 3
-            && after.as_bytes()[1] == b':'
-            && (after.as_bytes()[2] == b'\\' || after.as_bytes()[2] == b'/');
-
-        if looks_like_windows_drive_path {
-            first
-        } else {
-            trimmed
-                .rfind(':')
-                .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?
-        }
+            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?
     };
 
     let host = trimmed[..sep_index].trim();

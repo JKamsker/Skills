@@ -44,6 +44,30 @@ pub struct CliError {
     pub message: String,
 }
 
+const JSON_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonMeta {
+    pub schema_version: u32,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonError {
+    pub kind: String,
+    pub message: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JsonEnvelope<'a, T: Serialize> {
+    pub ok: bool,
+    pub data: Option<&'a T>,
+    pub error: Option<JsonError>,
+    pub meta: JsonMeta,
+}
+
 pub fn should_print_header(force: bool, suppress: bool) -> bool {
     if suppress {
         return false;
@@ -101,13 +125,28 @@ pub fn confirm_or_abort(
 }
 
 pub fn write_value<T: Serialize>(value: &T, format: OutputFormat) -> Result<(), CliError> {
-    // For product CLIs, ensure machine output is explicitly versioned (see references/cli-patterns.md).
     match format {
         OutputFormat::Json => {
-            println!("{}", serde_json::to_string_pretty(value).map_err(json_error)?);
+            let envelope = JsonEnvelope {
+                ok: true,
+                data: Some(value),
+                error: None,
+                meta: JsonMeta {
+                    schema_version: JSON_SCHEMA_VERSION,
+                },
+            };
+            println!("{}", serde_json::to_string_pretty(&envelope).map_err(json_error)?);
         }
         OutputFormat::Raw => {
-            println!("{}", serde_json::to_string(value).map_err(json_error)?);
+            let envelope = JsonEnvelope {
+                ok: true,
+                data: Some(value),
+                error: None,
+                meta: JsonMeta {
+                    schema_version: JSON_SCHEMA_VERSION,
+                },
+            };
+            println!("{}", serde_json::to_string(&envelope).map_err(json_error)?);
         }
         OutputFormat::Table => {
             let value = serde_json::to_value(value).map_err(json_error)?;

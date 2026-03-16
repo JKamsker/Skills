@@ -13,7 +13,7 @@ public static class SecretRedactor
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex BearerPattern = new(
-        @"\bBearer\s+[A-Za-z0-9._~+\-/=]+\b",
+        @"\bBearer\s+[A-Za-z0-9._~+\-/=]+(?=$|[^A-Za-z0-9._~+\-/=])",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex JsonSecretPattern = new(
@@ -42,4 +42,3 @@ public static class SecretRedactor
         return value;
     }
 }
-

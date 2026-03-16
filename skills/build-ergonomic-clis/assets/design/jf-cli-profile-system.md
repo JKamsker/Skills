@@ -330,12 +330,12 @@ This section documents only the auth commands that create/use profiles and store
 Interactive login to a Jellyfin server. Creates or updates a host entry and profile.
 
 ```
-jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-stdin] [--quick-connect]
+jf auth login [--server <VALUE>] [--profile <NAME>] [--username <USER>] [--password-stdin] [--quick-connect]
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--server` | Yes (for first login) | Server URL (or scheme-less `host:port`) when creating a new host entry. For existing hosts, this flag may also be a bare hostname or alias (uses stored `baseUrl` unless a full URL is supplied for login; if it differs, it may be saved as a profile-level `baseUrl` override). |
+| `--server` | Only if a server cannot be resolved | Server URL (or scheme-less `host:port`) when creating a new host entry. For existing hosts, this flag may also be a bare hostname or alias (uses stored `baseUrl` unless a full URL is supplied for login; if it differs, it may be saved as a profile-level `baseUrl` override). |
 | `--profile` | No | Profile name. Default: for existing hosts, follows standard profile resolution (§3.2). When creating a new host entry, prompts in human mode when a TTY is present; otherwise uses `"default"` (including in machine output modes). |
 | `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. Required in `--json` mode (no prompts). |
 | `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login (no prompts). |
@@ -360,7 +360,7 @@ jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-
 Best-effort revoke and remove the stored credential for a profile.
 
 ```
-jf auth logout [--server <value>] [--profile <name>]
+jf auth logout [--server <VALUE>] [--profile <NAME>]
 ```
 
 Resolves host and profile via standard resolution (§3). Removes the stored credential from the secret store. If the profile uses token auth and the server supports revocation, performs a best-effort server-side revoke. For API keys, use `jf auth api-keys delete` to revoke server-side.
@@ -374,7 +374,7 @@ This command does not remove the profile metadata from config. Use `jf auth prof
 List all hosts and their profiles.
  
 ```
-jf auth profiles list [--server <value>]
+jf auth profiles list [--server <VALUE>]
 ```
  
 Without `--server`: lists all hosts and all profiles. With `--server`: lists profiles for that host only.
@@ -402,7 +402,7 @@ nas.local
 Show profile details.
   
 ```
-jf auth profiles show [<name>] [--server <value>]
+jf auth profiles show [<name>] [--server <VALUE>]
 ```
   
 Without `<name>`, resolves the host and profile via standard resolution and prints the effective host, profile name, base URL, username, and auth method. Useful for debugging which profile a command would use.
@@ -430,7 +430,7 @@ Auth:     token (from JF_TOKEN override)
 Set the default profile for a host.
  
 ```
-jf auth profiles use <name> [--server <value>]
+jf auth profiles use <name> [--server <VALUE>]
 ```
  
 Resolves the host via standard resolution (§3.1). Sets `defaultProfile` for that host to `<name>`. Errors if the profile does not exist on that host.
@@ -440,7 +440,7 @@ Resolves the host via standard resolution (§3.1). Sets `defaultProfile` for tha
 Rename a profile.
  
 ```
-jf auth profiles rename <old> <new> [--server <value>]
+jf auth profiles rename <old> <new> [--server <VALUE>]
 ```
  
 Resolves the host. Renames the profile key. Updates `defaultProfile` if it pointed to the old name. Errors if `<new>` already exists on that host.
@@ -450,7 +450,7 @@ Resolves the host. Renames the profile key. Updates `defaultProfile` if it point
 Remove a profile without revoking the token server-side.
  
 ```
-jf auth profiles delete <name> [--server <value>]
+jf auth profiles delete <name> [--server <VALUE>]
 ```
  
 Resolves the host. Removes the profile. If it was `defaultProfile`, clears `defaultProfile` (next resolution will require explicit selection or fall through to single-profile inference). If it was the last profile, removes the host entry.
@@ -599,8 +599,8 @@ These flags are available on all commands, not just `auth`:
  
 | Flag | Env Var | Description |
 |------|---------|-------------|
-| `--server <value>` | `JF_SERVER` | Hostname, alias, scheme-less `host:port`, or full URL to select/override the target server. |
-| `--profile <name>` | `JF_PROFILE` | Profile name to use on the resolved host. |
+| `--server <VALUE>` | `JF_SERVER` | Hostname, alias, scheme-less `host:port`, or full URL to select/override the target server. |
+| `--profile <NAME>` | `JF_PROFILE` | Profile name to use on the resolved host. |
 | `--config <path>` | `JF_CONFIG` | Path to config file (overrides default location). |
 | `--json` | `JF_OUTPUT` | Output the versioned JSON envelope contract to stdout (non-interactive). |
 | `--quiet` | | Suppress human-facing output and prompts; if a confirmation prompt would be required, refuse with exit `2` unless `--yes` or `--dry-run` is provided. |
@@ -659,7 +659,7 @@ The CLI must never write a config that violates the above rules. Commands that w
  
 ### Duplicate hostnames from different URLs
  
-`https://myserver.com` and `https://myserver.com:8096/jellyfin` both resolve to hostname `myserver.com`. They share a host entry. The first login sets the host-level `baseUrl`. A subsequent login with a different URL stores the difference as a profile-level `baseUrl` override.
+`https://myserver.com` and `http://myserver.com:8096/jellyfin` both resolve to hostname `myserver.com`. They share a host entry. The first login sets the host-level `baseUrl`. A subsequent login with a different URL stores the difference as a profile-level `baseUrl` override.
  
 ### IP addresses as hostnames
  
