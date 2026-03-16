@@ -32,12 +32,16 @@ public sealed class DiagnosticLogger
             var builder = new StringBuilder();
             builder.AppendLine($"Timestamp: {DateTimeOffset.UtcNow:O}");
             builder.AppendLine($"Operation: {operation}");
+            builder.AppendLine($"CommandLine: {SecretRedactor.RedactPotentialSecrets(Environment.CommandLine)}");
             builder.AppendLine($"BaseUrl: {SecretRedactor.RedactPotentialSecrets(context.BaseUrl)}");
             builder.AppendLine($"TargetIdentityKey: {context.TargetIdentityKey}");
             builder.AppendLine($"Profile: {context.Profile}");
             builder.AppendLine($"AuthSource: {context.AuthSource}");
             builder.AppendLine($"Exception: {exception.GetType().FullName}");
             builder.AppendLine($"Message: {SecretRedactor.RedactPotentialSecrets(exception.Message)}");
+            builder.AppendLine();
+            builder.AppendLine("ExceptionDetail:");
+            builder.AppendLine(SecretRedactor.RedactPotentialSecrets(exception.ToString()));
 
             if (request is not null)
             {
@@ -86,6 +90,9 @@ public sealed class DiagnosticLogger
             builder.AppendLine($"Operation: {operation}");
             builder.AppendLine($"Exception: {exception.GetType().FullName}");
             builder.AppendLine($"Message: {SecretRedactor.RedactPotentialSecrets(exception.Message)}");
+            builder.AppendLine();
+            builder.AppendLine("ExceptionDetail:");
+            builder.AppendLine(SecretRedactor.RedactPotentialSecrets(exception.ToString()));
 
             File.WriteAllText(path, builder.ToString());
             return path;

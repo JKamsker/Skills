@@ -324,12 +324,13 @@ fn parse_remote_url(raw: &str) -> Result<Url, CliError> {
         return Err(CliError(format!("unable to parse remote url '{raw}'")));
     }
 
-    let (user_prefix, host_and_path) = match raw.split_once('@') {
-        Some((user, rest)) => (format!("{user}@"), rest),
-        None => (String::new(), raw),
-    };
+    let (host_with_user, path) =
+        split_scp_host_and_path(trimmed).map_err(|err| CliError(format!("unable to parse remote url '{raw}': {err}")))?;
 
-    let (host, path) = split_scp_host_and_path(host_and_path)?;
+    let (user_prefix, host) = match host_with_user.rsplit_once('@') {
+        Some((user, host)) => (format!("{user}@"), host),
+        None => (String::new(), host_with_user),
+    };
     let host = if !host.starts_with('[') && host.parse::<std::net::Ipv6Addr>().is_ok() {
         format!("[{host}]")
     } else {
@@ -345,31 +346,31 @@ fn parse_remote_url(raw: &str) -> Result<Url, CliError> {
     Url::parse(&rewritten).map_err(|err| CliError(format!("unable to parse remote url '{raw}': {err}")))
 }
 
-fn split_scp_host_and_path(raw: &str) -> Result<(&str, &str), CliError> {
-    let trimmed = raw.trim();
+fn split_scp_host_and_path(input: &str) -> Result<(&str, &str), CliError> {
+    let trimmed = input.trim();
     if trimmed.is_empty() {
-        return Err(CliError(format!("unable to parse remote url '{raw}': empty")));
+        return Err(CliError("empty".to_string()));
     }
 
     let sep_index = if trimmed.starts_with('[') {
         let end = trimmed
             .find(']')
-            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?;
+            .ok_or_else(|| CliError("invalid scp-style remote; expected [ipv6]:path".to_string()))?;
         if trimmed.get(end + 1..end + 2) != Some(":") {
-            return Err(CliError(format!("unable to parse remote url '{raw}'")));
+            return Err(CliError("invalid scp-style remote; expected [ipv6]:path".to_string()));
         }
         end + 1
     } else {
         trimmed
             .find(':')
-            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?
+            .ok_or_else(|| CliError("invalid scp-style remote; expected host:path".to_string()))?
     };
 
     let host = trimmed[..sep_index].trim();
     let path = trimmed[sep_index + 1..].trim();
 
     if host.is_empty() || path.is_empty() {
-        return Err(CliError(format!("unable to parse remote url '{raw}'")));
+        return Err(CliError("invalid scp-style remote; expected host:path".to_string()));
     }
 
     Ok((host, path))

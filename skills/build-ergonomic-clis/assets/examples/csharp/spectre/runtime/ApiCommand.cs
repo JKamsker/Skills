@@ -149,7 +149,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 Error: new JsonError(
                     Kind: "network",
                     Message: "Network error."),
-                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPathForJson(logPath))));
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: NormalizeLogPath(logPath))));
             return;
         }
 
@@ -157,7 +157,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         if (!quiet && verbose)
             Console.Error.WriteLine($"Details: {SecretRedactor.RedactPotentialSecrets(ex.Message)}");
         if (!quiet && !string.IsNullOrWhiteSpace(logPath))
-            Console.Error.WriteLine($"Diagnostic log: {logPath}");
+            Console.Error.WriteLine($"Diagnostic log saved to: {logPath}");
     }
 
     private static void RenderUnexpectedError(Exception ex, string? logPath, OutputMode outputMode, bool quiet)
@@ -170,13 +170,13 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 Error: new JsonError(
                     Kind: "unexpected",
                     Message: "Unexpected error."),
-                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPathForJson(logPath))));
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: NormalizeLogPath(logPath))));
             return;
         }
 
         Console.Error.WriteLine("Unexpected client error.");
         if (!quiet && !string.IsNullOrWhiteSpace(logPath))
-            Console.Error.WriteLine($"Diagnostic log: {logPath}");
+            Console.Error.WriteLine($"Diagnostic log saved to: {logPath}");
     }
 
     private static string KindForExitCode(int exitCode)
@@ -207,10 +207,10 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         Console.Out.WriteLine(JsonSerializer.Serialize(envelope, options));
     }
 
-    private static string? SanitizeLogPathForJson(string? path)
+    private static string? NormalizeLogPath(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
             return null;
-        return System.IO.Path.GetFileName(path);
+        return path.Trim();
     }
 }

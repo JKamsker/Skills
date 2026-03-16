@@ -292,7 +292,8 @@ Non-HTTP example:
 
 - Resolve target/profile/auth once in shared runtime code instead of scattering through commands.
 - Make inference layered, inspectable, and reversible:
-  - resolve explicit inputs first (flags, env, config/profile defaults)
+  - resolve explicit inputs first (flags, env, explicit profile/context selection)
+  - then apply config/profile defaults
   - then apply context inference (git remotes, directory markers, etc.) only when needed
   - if you support fallback env vars (not mirroring explicit flags), document where they sit relative to other inference sources
 - Bind stored credentials to the chosen target identity key and refuse to silently reuse across mismatched targets.

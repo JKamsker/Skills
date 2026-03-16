@@ -30,7 +30,7 @@ The profile system allows the CLI to manage credentials for multiple Jellyfin se
  
 ### Design Principles
  
-- **Hostname-keyed**: Hosts are identified by their network hostname (e.g. `nas.local`, `jf.home.example.com`). This provides short, human-readable identifiers.
+- **Hostname-keyed**: Hosts are identified by their network hostname (or IP address) (e.g. `nas.local`, `jf.home.example.com`, `192.168.1.50`). This provides short, human-readable identifiers.
 - **Base URL inheritance**: Each host declares a `baseUrl`. Profiles inherit it by default but may override it (e.g. different port or path on the same hostname).
 - **Profile names are unique per host, not globally**. Two hosts may each have a profile named `admin`.
 - **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname key (lowercased hostname) + profile.
@@ -49,7 +49,7 @@ The profile system allows the CLI to manage credentials for multiple Jellyfin se
 | macOS    | `~/Library/Application Support/jf/config.json` |
 | Linux    | `$XDG_CONFIG_HOME/jf/config.json` (default `~/.config/jf/config.json`) |
  
-Overridable with `--config <path>` or `JF_CONFIG` env var.
+Overridable with `--config <PATH>` or `JF_CONFIG` env var.
  
 ### Schema
 
@@ -175,7 +175,7 @@ Evaluated in order, first match wins:
  
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--server <value>` flag | If a full URL (or scheme-less `host:port`): extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname or alias: see lookup order below. |
+| 1 | `--server <VALUE>` flag | If a full URL (or scheme-less `host:port`): extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname or alias: see lookup order below. |
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
@@ -208,7 +208,7 @@ Given a resolved host, evaluated in order:
  
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--profile <name>` flag | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
+| 1 | `--profile <NAME>` flag | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 2 | `JF_PROFILE` env var | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 3 | `defaultProfile` for the resolved host | Used as-is. |
 | 4 | Single profile | If the resolved host has exactly one profile, use it implicitly. |
@@ -242,7 +242,7 @@ The final resolved base URL is used for all API requests in that invocation.
                                       │
        ┌──────────────────────────────┘
        ▼
-  --server full URL > profile.baseUrl > host.baseUrl ──→ final base URL
+  --server full URL (or scheme-less host:port) > profile.baseUrl > host.baseUrl ──→ final base URL
 ```
  
 ---
@@ -459,7 +459,7 @@ Resolves the host. Removes the profile. If it was `defaultProfile`, clears `defa
  
 #### `jf auth host list`
  
-List all configured hostnames and their base URLs.
+List all configured hosts and their base URLs.
  
 ```
 jf auth host list
@@ -482,9 +482,9 @@ Set the global default host.
 jf auth host use <hostname>
 ```
 
-Sets `defaultHost` in config. Errors if the hostname is not in `hosts`.
+Sets `defaultHost` in config. Errors if the hostname key is not in `hosts`.
 
-#### `jf auth host rename <old> <new>`
+#### `jf auth host rename <old-hostname> <new-hostname>`
 
 Rename a hostname key.
 
@@ -601,7 +601,7 @@ These flags are available on all commands, not just `auth`:
 |------|---------|-------------|
 | `--server <VALUE>` | `JF_SERVER` | Hostname, alias, scheme-less `host:port`, or full URL to select/override the target server. |
 | `--profile <NAME>` | `JF_PROFILE` | Profile name to use on the resolved host. |
-| `--config <path>` | `JF_CONFIG` | Path to config file (overrides default location). |
+| `--config <PATH>` | `JF_CONFIG` | Path to config file (overrides default location). |
 | `--json` | `JF_OUTPUT` | Output the versioned JSON envelope contract to stdout (non-interactive). |
 | `--quiet` | | Suppress human-facing output and prompts; if a confirmation prompt would be required, refuse with exit `2` unless `--yes` or `--dry-run` is provided. |
 | `--dry-run` | | Preview a mutating operation without mutating. |

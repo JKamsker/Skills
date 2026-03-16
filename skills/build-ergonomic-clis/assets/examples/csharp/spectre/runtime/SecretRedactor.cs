@@ -16,6 +16,10 @@ public static class SecretRedactor
         @"\bBearer\s+[A-Za-z0-9._~+\-/=]+(?=$|[^A-Za-z0-9._~+\-/=])",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex BasicPattern = new(
+        @"\bBasic\s+[A-Za-z0-9+/=]+(?=$|[^A-Za-z0-9+/=])",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private static readonly Regex JsonSecretPattern = new(
         "\"(?<key>token|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|apiKey|api_key|apikey|clientSecret|client_secret|password|secret|sig|signature|credential|sharedAccessSignature|sharedaccesssignature|sas)\"\\s*:\\s*\"(?<value>[^\"]+)\"",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -36,6 +40,7 @@ public static class SecretRedactor
         value = JwtPattern.Replace(value, "REDACTED_JWT");
         value = SecretParamPattern.Replace(value, match => $"{match.Groups["key"].Value}=REDACTED");
         value = BearerPattern.Replace(value, "Bearer REDACTED");
+        value = BasicPattern.Replace(value, "Basic REDACTED");
         value = JsonSecretPattern.Replace(value, match => $"\"{match.Groups["key"].Value}\":\"REDACTED\"");
         value = CliFlagValuePattern.Replace(value, match => $"{match.Groups[1].Value}--{match.Groups["key"].Value} REDACTED");
         value = CliFlagEqualsPattern.Replace(value, match => $"{match.Groups[1].Value}--{match.Groups["key"].Value}=REDACTED");

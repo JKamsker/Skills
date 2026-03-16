@@ -87,7 +87,7 @@ jf
  |    |-- host
  |    |    |-- list                List configured hosts
  |    |    |-- use <hostname>      Set the default host
- |    |    |-- rename <old> <new>  Rename a hostname key
+ |    |    |-- rename <old-hostname> <new-hostname>  Rename a hostname key
  |    |    |-- delete <hostname>   Remove a host and its profiles  [confirm]
  |    |    |-- alias
  |    |    |    |-- add <hostname> <alias>    Add an alias
@@ -387,9 +387,9 @@ These flags are available on every command via `GlobalSettings`:
 
 | Flag | Short | Type | Description |
 |---|---|---|---|
-| `--server <value>` | `-S` | string | Hostname, alias, scheme-less `host:port`, or full URL of the target Jellyfin server |
+| `--server <VALUE>` | `-S` | string | Hostname, alias, scheme-less `host:port`, or full URL of the target Jellyfin server |
 | `--profile <NAME>` | | string | Use a named profile on the resolved host (host-scoped; not globally unique) |
-| `--config <path>` | | string | Path to config file (overrides default location) |
+| `--config <PATH>` | | string | Path to config file (overrides default location) |
 | `--json` | | bool | Output stable machine-readable JSON to stdout |
 | `--no-color` | | bool | Disable ANSI color/formatting (also respects `NO_COLOR` env var) |
 | `--quiet` | `-q` | bool | Suppress banners, progress, prompts. Fail if confirmation required. |
@@ -465,14 +465,14 @@ jf auth status
 jf auth whoami
 jf auth set-token <TOKEN> [--stdin] [--no-validate]
 jf auth test
-jf auth profiles list
-jf auth profiles use <name>
-jf auth profiles show [<name>]
-jf auth profiles rename <old> <new>
-jf auth profiles delete <name>
+jf auth profiles list [--server <VALUE>]
+jf auth profiles use <name> [--server <VALUE>]
+jf auth profiles show [<name>] [--server <VALUE>]
+jf auth profiles rename <old> <new> [--server <VALUE>]
+jf auth profiles delete <name> [--server <VALUE>]
 jf auth host list
 jf auth host use <hostname>
-jf auth host rename <old> <new>
+jf auth host rename <old-hostname> <new-hostname>
 jf auth host delete <hostname> [--yes] [--dry-run]
 jf auth host alias add <hostname> <alias>
 jf auth host alias remove <hostname> <alias>
@@ -554,7 +554,7 @@ Resolution is a two-step process: resolve the host, then resolve the profile wit
 
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--server <value>` flag | Full URL (or scheme-less `host:port`): extract hostname for lookup; use the URL as a runtime base URL override. Bare hostname or alias: lookup below. |
+| 1 | `--server <VALUE>` flag | Full URL (or scheme-less `host:port`): extract hostname for lookup; use the URL as a runtime base URL override. Bare hostname or alias: lookup below. |
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
@@ -570,7 +570,7 @@ Given a resolved host:
 
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--profile <name>` flag | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
+| 1 | `--profile <NAME>` flag | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 2 | `JF_PROFILE` env var | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 3 | `defaultProfile` for the host | Used as-is. |
 | 4 | Single profile | If the host has exactly one profile, use it implicitly. |
@@ -586,7 +586,7 @@ Single file: `config.json`. Location:
 | macOS    | `~/Library/Application Support/jf/config.json` |
 | Linux    | `$XDG_CONFIG_HOME/jf/config.json` (default `~/.config/jf/config.json`) |
 
-Override with `--config <path>` or `JF_CONFIG` env var.
+Override with `--config <PATH>` or `JF_CONFIG` env var.
 
 ### Config schema
 
