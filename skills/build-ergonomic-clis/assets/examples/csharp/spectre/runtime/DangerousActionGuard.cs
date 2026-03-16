@@ -4,7 +4,7 @@ public enum GuardDecision
 {
     Continue,
     DryRunPrinted,
-    Cancelled,
+    // If the user declines, this helper throws CliException.Cancelled (exit 10).
 }
 
 // This example follows the base exit-code split:
@@ -15,8 +15,7 @@ public sealed class DangerousActionGuard
     public async Task<GuardDecision> AuthorizeAsync(
         GlobalOptions options,
         string prompt,
-        Func<Task> dryRunAction,
-        CancellationToken cancellationToken = default)
+        Func<Task> dryRunAction)
     {
         if (options.DryRun)
         {
@@ -27,18 +26,22 @@ public sealed class DangerousActionGuard
         if (options.Yes)
             return GuardDecision.Continue;
 
+        if (options.OutputMode == OutputMode.Json)
+            throw CliException.Usage("Confirmation required. Re-run with --yes or --dry-run. Prompts are disabled in --json mode.");
+
         if (options.Quiet || Console.IsInputRedirected || Console.IsErrorRedirected)
             throw CliException.Usage("Confirmation required. Re-run with --yes or --dry-run.");
 
         Console.Error.Write($"{prompt} [y/N]: ");
         Console.Error.Flush();
 
-        var answer = (await Task.Run(Console.ReadLine, cancellationToken) ?? string.Empty)
+        var answer = (Console.ReadLine() ?? string.Empty)
             .Trim()
             .ToLowerInvariant();
 
-        return answer is "y" or "yes"
-            ? GuardDecision.Continue
-            : GuardDecision.Cancelled;
+        if (answer is "y" or "yes")
+            return GuardDecision.Continue;
+
+        throw CliException.Cancelled("Cancelled.");
     }
 }

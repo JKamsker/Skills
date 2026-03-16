@@ -106,9 +106,28 @@ pub fn resolve_effective_config(
     let profile = match explicit_profile.clone() {
         Some(profile) => profile,
         None => match explicit_target_key.as_deref() {
-            Some(target_key) => select_profile_for_target(target_key, config)?
-                .or_else(|| config.active_profile.clone())
-                .unwrap_or_else(|| "default".to_string()),
+            Some(target_key) => {
+                if let Some(selected) = select_profile_for_target(target_key, config)? {
+                    selected
+                } else if let Some(active) = config.active_profile.clone() {
+                    let active_cfg = config.profiles.get(&active).cloned().unwrap_or_default();
+                    let active_target_key = if let Some(hostname) = active_cfg.hostname.as_deref() {
+                        Some(normalize_hostname(hostname)?)
+                    } else if let Some(base_url) = active_cfg.base_url.as_deref() {
+                        Some(target_identity_hostname_key(&normalize_base_url_input(base_url)?)?)
+                    } else {
+                        None
+                    };
+
+                    if active_target_key.as_deref() == Some(target_key) {
+                        active
+                    } else {
+                        "default".to_string()
+                    }
+                } else {
+                    "default".to_string()
+                }
+            }
             None => config
                 .active_profile
                 .clone()
@@ -118,17 +137,19 @@ pub fn resolve_effective_config(
 
     let profile_cfg = config.profiles.get(&profile).cloned().unwrap_or_default();
 
-    let profile_hostname = profile_cfg
-        .hostname
-        .as_deref()
-        .map(normalize_hostname)
-        .transpose()?;
+    let profile_target_key = if let Some(hostname) = profile_cfg.hostname.as_deref() {
+        Some(normalize_hostname(hostname)?)
+    } else if let Some(base_url) = profile_cfg.base_url.as_deref() {
+        Some(target_identity_hostname_key(&normalize_base_url_input(base_url)?)?)
+    } else {
+        None
+    };
 
     if explicit_profile.is_some() {
-        if let (Some(ref explicit_target_key), Some(ref profile_hostname)) = (&explicit_target_key, &profile_hostname) {
-            if explicit_target_key != profile_hostname {
+        if let (Some(ref explicit_target_key), Some(ref profile_target_key)) = (&explicit_target_key, &profile_target_key) {
+            if explicit_target_key != profile_target_key {
                 return Err(CliError::usage(format!(
-                    "profile '{profile}' is configured for '{profile_hostname}', but the target is '{explicit_target_key}'"
+                    "profile '{profile}' is configured for '{profile_target_key}', but the target is '{explicit_target_key}'"
                 )));
             }
         }
@@ -138,10 +159,12 @@ pub fn resolve_effective_config(
         Some(url) => url,
         None => match profile_cfg.base_url.as_deref() {
             Some(url) => normalize_base_url_input(url)?,
-            None => match profile_hostname.as_deref() {
-                Some(hostname) => normalize_base_url_input(hostname)?,
-                None => "https://api.example.test".to_string(),
-            },
+            None => {
+                return Err(CliError::usage(
+                    "unable to resolve target base url. Pass --host/TOOL_HOST or configure a profile base_url."
+                        .to_string(),
+                ))
+            }
         },
     };
 
@@ -187,20 +210,56 @@ pub fn resolve_effective_config(
 
 fn select_profile_for_target(target_key: &str, config: &Config) -> Result<Option<String>, CliError> {
     if let Some(profile) = config.target_defaults.get(target_key) {
+        if !config.profiles.contains_key(profile) {
+            return Err(CliError::usage(format!(
+                "target default for '{target_key}' references missing profile '{profile}'"
+            )));
+        }
         return Ok(Some(profile.clone()));
+    }
+
+    // Be forgiving if the config keys were not pre-normalized (e.g. mixed casing or URL-ish keys).
+    let mut normalized_matches = config
+        .target_defaults
+        .iter()
+        .filter_map(|(key, profile)| {
+            let normalized_key = normalize_hostname(key).ok()?;
+            (normalized_key == target_key).then_some(profile)
+        })
+        .collect::<Vec<_>>();
+
+    normalized_matches.sort();
+    normalized_matches.dedup();
+
+    if normalized_matches.len() == 1 {
+        let profile = normalized_matches[0];
+        if !config.profiles.contains_key(profile) {
+            return Err(CliError::usage(format!(
+                "target default for '{target_key}' references missing profile '{profile}'"
+            )));
+        }
+        return Ok(Some(profile.clone()));
+    } else if normalized_matches.len() > 1 {
+        return Err(CliError::usage(format!(
+            "multiple target defaults match '{target_key}'. Normalize the keys or pass --profile."
+        )));
     }
 
     let matching_profiles = config
         .profiles
         .iter()
         .filter_map(|(name, profile)| {
-            let hostname = profile.hostname.as_deref()?.trim();
-            if hostname.is_empty() {
-                return None;
-            }
+            let key = if let Some(hostname) = profile.hostname.as_deref() {
+                normalize_hostname(hostname).ok()
+            } else if let Some(base_url) = profile.base_url.as_deref() {
+                normalize_base_url_input(base_url)
+                    .ok()
+                    .and_then(|url| target_identity_hostname_key(&url).ok())
+            } else {
+                None
+            }?;
 
-            let normalized = normalize_hostname(hostname).ok()?;
-            (normalized == target_key).then_some(name.clone())
+            (key == target_key).then_some(name.clone())
         })
         .collect::<Vec<_>>();
 
@@ -250,6 +309,21 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return Err(CliError::usage("hostname is required".to_string()));
+    }
+
+    let looks_like_url = trimmed.contains("://") || trimmed.contains('/') || trimmed.contains(':');
+    if looks_like_url {
+        let candidate = if trimmed.contains("://") {
+            trimmed.to_string()
+        } else {
+            format!("https://{trimmed}")
+        };
+
+        if let Ok(url) = Url::parse(&candidate) {
+            if let Some(host) = url.host_str() {
+                return Ok(host.to_ascii_lowercase());
+            }
+        }
     }
 
     Ok(trimmed.to_ascii_lowercase())

@@ -51,7 +51,7 @@ This worked example explicitly chooses:
 
 - **CLI class:** service-native
 - **Target identity mode:** hostname key (lowercased hostname)
-- **Machine contract style:** envelope JSON on stdout (default) with `meta.schemaVersion = 1`
+- **Machine contract style:** envelope JSON on stdout when `--json` is used, with `meta.schemaVersion = 1`
 - **Secret storage:** separate secret store (OS credential store / keyring) preferred
 - **Confirmation refusal:** exit `2` when interaction is required but forbidden (`--quiet` / non-TTY)
 
@@ -80,8 +80,8 @@ jf
  |    |-- test                     Validate stored credentials against the server
  |    |-- profiles
  |    |    |-- list                List all saved profiles
- |    |    |-- use <name>          Switch the active profile
- |    |    |-- show <name>         Show details of a profile
+ |    |    |-- use <name>          Set the default profile for the host
+ |    |    |-- show [<name>]       Show details of a profile (or the resolved profile)
  |    |    |-- rename <old> <new>  Rename a profile
  |    |    |-- delete <name>       Delete a saved profile
  |    |-- host
@@ -90,9 +90,9 @@ jf
  |    |    |-- rename <old> <new>  Rename a host key
  |    |    |-- delete <hostname>   Remove a host and its profiles  [confirm]
  |    |    |-- alias
- |    |    |    |-- add <host> <alias>    Add an alias
- |    |    |    |-- remove <host> <alias> Remove an alias
- |    |    |    |-- list [<host>]         List aliases
+ |    |    |    |-- add <hostname> <alias>    Add an alias
+ |    |    |    |-- remove <hostname> <alias> Remove an alias
+ |    |    |    |-- list [<hostname>]         List aliases
  |    |-- api-keys                 [admin] Manage server-level API keys
  |    |    |-- list                List all API keys (GET /Auth/Keys)
  |    |    |-- create <name>       Create a new API key (POST /Auth/Keys)
@@ -401,9 +401,7 @@ These flags are available on every command via `GlobalSettings`:
 
 **Note**: The generic pattern in `references/service-cli-patterns.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a bare hostname, or an alias — not strictly a hostname.
 
-**Note**: `--force` is intentionally omitted from globals. It will only appear on
-specific commands where "bypass a conflict" has an unambiguous meaning (e.g., force-overwriting
-an image).
+**Note**: This CLI intentionally avoids a global “force” flag. Use `--dry-run` to preview and `--yes` to bypass destructive confirmations.
 
 ```csharp
 public class GlobalSettings : CommandSettings
@@ -415,6 +413,10 @@ public class GlobalSettings : CommandSettings
     [CommandOption("--profile <NAME>")]
     [Description("Use a named profile")]
     public string? Profile { get; set; }
+
+    [CommandOption("--config <PATH>")]
+    [Description("Override config file path")]
+    public string? Config { get; set; }
 
     [CommandOption("--json")]
     [Description("Output machine-readable JSON")]
@@ -457,7 +459,7 @@ Jellyfin supports three authentication paths:
 ### Auth commands
 
 ```
-jf auth login [--username <USER>] [--password-stdin] [--quick-connect]
+jf auth login --server <SERVER> [--profile <NAME>] [--username <USER>] [--password-stdin] [--quick-connect]
 jf auth logout
 jf auth status
 jf auth whoami
@@ -465,7 +467,7 @@ jf auth set-token <TOKEN> [--stdin] [--no-validate]
 jf auth test
 jf auth profiles list
 jf auth profiles use <name>
-jf auth profiles show <name>
+jf auth profiles show [<name>]
 jf auth profiles delete <name>
 jf auth api-keys list
 jf auth api-keys create <name>
@@ -474,23 +476,25 @@ jf auth api-keys delete <key>
 
 ### Auth flow: `jf auth login`
 
-1. Resolve host from `--server` flag, `JF_SERVER` env var, active profile, or fail.
+1. Resolve host from `--server` flag, `JF_SERVER` env var, config default, or single-entry inference; otherwise fail.
 2. If `--quick-connect`:
-   a. Check GET /QuickConnect/Enabled. If disabled, fail with message.
-   b. POST /QuickConnect/Initiate to get a code.
-   c. Display code to user on stderr.
-   d. Poll GET /QuickConnect/Connect until authorized or timeout.
-   e. POST /Users/AuthenticateWithQuickConnect with the secret.
-   f. Store the returned AccessToken.
+    a. In `--json` mode, refuse (exit `2`): Quick Connect is interactive and requires user-visible prompts/codes.
+    b. Check GET /QuickConnect/Enabled. If disabled, fail with message.
+    c. POST /QuickConnect/Initiate to get a code.
+    d. Display code to user on stderr.
+    e. Poll GET /QuickConnect/Connect until authorized or timeout.
+    f. POST /Users/AuthenticateWithQuickConnect with the secret.
+    g. Store the returned AccessToken.
 3. If username/password:
-   a. If `--username` not provided and TTY present, prompt on stderr.
-   b. If `--password-stdin`, read password from stdin (one line, no echo).
-   c. If TTY present and no `--password-stdin`, prompt for password on stderr with no-echo.
-   d. If no TTY and no `--password-stdin`, fail: `Password required. Use --password-stdin or run interactively.`
-   e. POST /Users/AuthenticateByName with username and password.
-   f. Store the returned AccessToken in the secret store bound to the hostname identity key (lowercased hostname).
-4. Save a profile entry unless `--no-save` is passed.
-5. Print the username and server on stderr to confirm.
+    a. In `--json` mode, prompts are disabled: require `--username` and `--password-stdin` (or refuse with exit `2`).
+    b. If `--username` not provided and TTY present, prompt on stderr.
+    c. If `--password-stdin`, read password from stdin (one line, no echo).
+    d. If TTY present and no `--password-stdin`, prompt for password on stderr with no-echo.
+    e. If no TTY and no `--password-stdin`, fail: `Password required. Use --password-stdin or run interactively.`
+    f. POST /Users/AuthenticateByName with username and password.
+    g. Store the returned credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{authKind}` (hostname-key identity + profile name + credential kind).
+4. Save or update a profile entry in config.
+5. In human output modes, print the username and server on stderr to confirm. In `--json` mode, include these as structured metadata in the JSON envelope (avoid ad hoc stderr noise).
 
 ### Auth failure behavior
 
@@ -513,10 +517,11 @@ The CLI never opens a login prompt from a non-auth command. Ever.
   - hostname identity key (lowercased hostname)
   - profile name (within that host)
   - credential kind (`token` or `apiKey`)
+- Fallback (allowed but discouraged): a separate secrets file with strict permissions and explicit redaction rules. Do not inline secrets in `config.json`.
 - File permissions: `config.json` is still user-only (600 on Unix; user-restricted ACL on Windows where possible).
 - If a legacy `credentials.json` exists and `config.json` does not, the CLI performs an automatic one-time migration on first run:
   - moves the credential into the secret store
-  - writes the new `config.json`
+  - writes the new `config.json` (creates `hosts[hostnameKey]` and a `"default"` profile, and sets `defaultHost` / `defaultProfile`)
   - backs up `credentials.json` to `credentials.json.bak`
   - emits a brief stderr note in human mode (no noisy output in machine mode)
 
@@ -591,6 +596,7 @@ Override with `--config <path>` or `JF_CONFIG` env var.
         },
         "admin": {
           "user": "admin",
+          "baseUrl": "https://jf.home.example.com/admin",
           "authKind": "apiKey"
         }
       }
@@ -610,7 +616,7 @@ Override with `--config <path>` or `JF_CONFIG` env var.
 }
 ```
 
-Hosts are keyed by network hostname (lowercased). Profiles are nested under their host. Credentials live in the secret store; `authKind` declares what is stored for the profile.
+Hosts are keyed by network hostname (lowercased). Profiles are nested under their host and may optionally override the host `baseUrl`. Credentials live in the secret store; `authKind` declares what is stored for the profile.
 
 ---
 
@@ -620,7 +626,7 @@ Hosts are keyed by network hostname (lowercased). Profiles are nested under thei
 |---|---|---|
 | `JF_SERVER` | `--server` | Jellyfin server (hostname, alias, or full URL) |
 | `JF_TOKEN` | (auth override) | Access token override, bypasses the secret store |
-| `JF_PROFILE` | `--profile` | Active profile name |
+| `JF_PROFILE` | `--profile` | Profile name override for the resolved host |
 | `JF_CONFIG` | `--config` | Override config file path |
 | `JF_OUTPUT` | `--json` | Set to `json` for machine output |
 | `NO_COLOR` | `--no-color` | Disable ANSI formatting (standard, see no-color.org) |
@@ -629,6 +635,7 @@ Hosts are keyed by network hostname (lowercased). Profiles are nested under thei
 
 `JF_TOKEN` is specifically for CI/automation pipelines where storing a profile is undesirable.
 When set, it takes precedence over any stored credential for the resolved host.
+If `JF_TOKEN` is set and `JF_SERVER` is a full URL, the CLI may allow a config-less ephemeral context for that invocation (no config writes, no secret-store access).
 
 ---
 
@@ -670,6 +677,8 @@ Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--
 - Stable JSON on **stdout**.
 - One JSON envelope per command invocation (versioned).
 - No ANSI codes, no progress bars, no banners mixed in.
+- `jf raw ... --json` still returns the envelope; `data` contains the parsed JSON response from the server for that call.
+- In `--json` mode, avoid stderr noise; surface diagnostic paths and structured errors in the envelope `meta`/`error`. Use stderr only when the envelope cannot be emitted.
 - Errors are still JSON when `--json` is set:
 
 ```json
@@ -694,7 +703,7 @@ Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--
   ```
   Error: Confirmation required. Use --yes to confirm or --dry-run to preview.
   ```
-- Combined with `--json`, emits minimal JSON output (result only, no banners).
+- Combined with `--json`, still emits the normal JSON envelope on stdout; `--quiet` only suppresses human-facing stderr chatter.
 
 ### Dry-run output
 
@@ -807,7 +816,7 @@ executing. These include:
 | `--yes` | Skip prompt, execute immediately. |
 | `--dry-run --yes` | `--dry-run` wins. Preview only, exit 0. |
 | `--quiet` | Fail with exit 2: "Confirmation required. Use --yes to confirm or --dry-run to preview." |
-| `--quiet --yes` | Execute silently. No prompt, no output on success (exit 0 only). |
+| `--quiet --yes` | Execute silently. In human mode: no output on success. In `--json` mode: still emits the JSON envelope on stdout. |
 | `--quiet --dry-run` | Print preview, exit 0. No prompt. |
 
 ### Confirmation prompt format
@@ -864,10 +873,10 @@ export JF_SERVER="https://jf.company.com"
 export JF_TOKEN="eyJhbGciOiJIUzI1NiJ9..."
 
 # List all users as JSON for processing
-jf users list --json | jq '.[] | {name: .Name, id: .Id, lastActive: .LastActivityDate}'
+jf users list --json | jq '.data[] | {name: .Name, id: .Id, lastActive: .LastActivityDate}'
 
 # Check a specific user's policy
-jf users get abc123 --json | jq '.Policy'
+jf users get abc123 --json | jq '.data.Policy'
 ```
 
 ### Example 3: Library maintenance with dry-run safety
@@ -922,7 +931,7 @@ jf playlists items add abc123 --items d4e5f6,g7h8i9
 jf playlists items list abc123
 
 # Call an endpoint not yet wrapped by the CLI
-jf raw GET "/Items/Filters2?parentId=xyz789" --json
+jf raw GET "/Items/Filters2?parentId=xyz789" --json | jq '.data'
 
 # POST with a body
 jf raw POST "/Library/Media/Updated" --body '{"Updates":[]}'

@@ -97,12 +97,14 @@ Tokens and API keys are stored separately from `config.json` (OS credential stor
 
 Recommended keying model:
 
-- `jf:cred:{hostname}:{profile}:token`
-- `jf:cred:{hostname}:{profile}:apiKey`
+- `jf:cred:{hostnameKey}:{profile}:token`
+- `jf:cred:{hostnameKey}:{profile}:apiKey`
 
-Where `{hostname}` is the **hostname key** (lowercased) and `{profile}` is the profile name within that host.
+Where `{hostnameKey}` is the **hostname key** (lowercased) and `{profile}` is the profile name within that host.
 
-Fallback (allowed but discouraged): a separate `credentials.json` file with strict permissions and explicit redaction rules. If this fallback is used, it must be clearly labeled as a tradeoff in docs and help.
+Fallback (allowed but discouraged): a separate secrets file (e.g. `secrets.json`) with strict permissions and explicit redaction rules. If this fallback is used, it must be clearly labeled as a tradeoff in docs and help.
+
+Legacy note: `credentials.json` is treated as a legacy format to migrate away from (§7), not as a preferred ongoing secret store.
 
 ### Example
  
@@ -178,6 +180,13 @@ Evaluated in order, first match wins:
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
 | 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <hostname>` |
+
+**CI/automation escape hatch:** If `JF_TOKEN` is set and the selected server input is a **full URL**, the CLI may allow an ephemeral, config-less context:
+
+- If no configured host/alias matches the extracted hostname, treat it as an implicit host for this invocation.
+- Derive `hostnameKey` from the URL hostname and use the URL as the effective base URL.
+- Select `profileName` from `--profile`/`JF_PROFILE`, or default to `"default"`.
+- Do not read or write config and do not touch the secret store.
 
 **Lookup order for a bare hostname/alias value:**
 
@@ -278,6 +287,13 @@ resolve(serverArg, profileArg):
     if isUrl(hostInput) then lower(parseUrl(hostInput).hostname)
     else lower(hostInput)
 
+  // CI/automation escape hatch: allow an ephemeral context with env token + full URL.
+  // This bypasses config and the secret store and does not create or modify profiles.
+  if env.JF_TOKEN is set and isUrl(hostInput) and (config.hosts[hostnameKey] is missing) and (resolveAlias(hostnameKey) is missing):
+    profileName = profileArg ?? env.JF_PROFILE ?? "default"
+    effectiveBaseUrl = normalizeBaseUrl(hostInput)
+    return (hostnameKey, profileName, effectiveBaseUrl, env.JF_TOKEN)
+
   host = config.hosts[hostnameKey] ?? resolveAlias(hostnameKey) ?? error()
 
   profileName = profileArg ?? env.JF_PROFILE ?? host.defaultProfile ?? singleProfileOrError()
@@ -288,7 +304,9 @@ resolve(serverArg, profileArg):
     else normalizeBaseUrl(profile.baseUrl ?? host.baseUrl)
 
   credentialKind = profile.authKind
-  secret = secretStore.get("jf:cred:{hostnameKey}:{profileName}:{credentialKind}") ?? missingAuthError()
+  secret =
+    if env.JF_TOKEN is set then env.JF_TOKEN
+    else secretStore.get("jf:cred:{hostnameKey}:{profileName}:{credentialKind}") ?? missingAuthError()
 
   return (hostnameKey, profileName, effectiveBaseUrl, secret)
 ```
@@ -300,44 +318,46 @@ resolve(serverArg, profileArg):
 ### 5.1 Authentication
  
 #### `jf auth login`
- 
+
 Interactive login to a Jellyfin server. Creates or updates a host entry and profile.
- 
+
 ```
-jf auth login --server <url> [--profile <name>] [--api-key <key>]
+jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-stdin] [--quick-connect]
 ```
  
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--server` | Yes (for first login) | Full server URL. Hostname extracted as config key, URL stored as `baseUrl`. |
 | `--profile` | No | Profile name. Default: prompts interactively, or `"default"` in non-interactive mode. |
-| `--api-key` | No | Use API key auth instead of username/password. |
- 
+| `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. |
+| `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login. |
+| `--quick-connect` | No | Use the Quick Connect device-flow-style login (interactive). Refuses in machine output modes. |
+  
 **Flow:**
- 
+  
 1. Extract hostname from `--server` URL.
-2. POST to `<baseUrl>/Users/AuthenticateByName` (or accept an API key via an explicit secret flag).
+2. Perform the selected auth flow (password-based or quick-connect) and obtain an access token (see `jf-cli-design.md` for the detailed interaction contract).
 3. Create or update `hosts[hostname]`:
    - Set `baseUrl` on the host if this is a new host entry.
-   - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
-   - Store the credential in the secret store under `jf:cred:{hostname}:{profile}:{authKind}`.
-   - If this is the only host, set as `defaultHost`.
-   - If this is the only profile on the host, set as `defaultProfile`.
+    - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
+    - Store the credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{authKind}`.
+    - If this is the only host, set as `defaultHost`.
+    - If this is the only profile on the host, set as `defaultProfile`.
 4. Write config.
  
 **Profile `baseUrl` override:** If the host already exists and the login URL differs from the host's `baseUrl`, store the login URL as a profile-level `baseUrl` override.
  
 #### `jf auth logout`
- 
-Revoke token and remove a profile.
- 
+  
+Discard the stored credential for a profile.
+  
 ```
 jf auth logout [--server <host>] [--profile <name>]
 ```
- 
-Resolves host and profile via standard resolution (§3). Revokes the token server-side if possible, then removes the profile from config. If it was the last profile on the host, removes the host entry. If the host was `defaultHost` and is removed, clears `defaultHost`.
+  
+Resolves host and profile via standard resolution (§3). Revokes the token server-side if possible, then removes the stored credential from the secret store.
 
-Also removes the stored credential from the secret store for that hostname/profile.
+This command does not remove the profile metadata from config. Use `jf auth profiles delete <name>` to remove a profile entirely.
  
 ### 5.2 Profile Management
  
@@ -370,14 +390,16 @@ nas.local
 - Profile-level `baseUrl` shown only if it overrides the host.
  
 #### `jf auth profiles show`
- 
-Show the fully resolved profile for the current context.
- 
+  
+Show profile details.
+  
 ```
-jf auth profiles show [--server <host>] [--profile <name>]
+jf auth profiles show [<name>] [--server <host>]
 ```
- 
-Resolves using standard resolution and prints the effective host, profile name, base URL, username, and auth method. Useful for debugging which profile a command would use.
+  
+Without `<name>`, resolves the host and profile via standard resolution and prints the effective host, profile name, base URL, username, and auth method. Useful for debugging which profile a command would use.
+
+With `<name>`, resolves the host via standard resolution and then prints the named profile under that host (errors if it does not exist).
  
 **Output format:**
  
@@ -463,10 +485,15 @@ Renames the key in `hosts`. Updates `defaultHost` if it pointed to the old name.
 Remove a host and all its profiles.
  
 ```
-jf auth host delete <hostname> [--force]
+jf auth host delete <hostname> [--yes] [--dry-run]
 ```
  
-Removes the host entry and all profiles within it. Without `--force`, prompts for confirmation if the host has more than one profile. Clears `defaultHost` if it pointed to this host.
+Removes the host entry and all profiles within it. Follows the global confirmation rules:
+
+- without `--yes`, prompts for confirmation (TTY-only)
+- with `--quiet` or without a TTY, refuses with exit `2` unless `--yes` or `--dry-run` is provided
+
+Clears `defaultHost` if it pointed to this host.
  
 #### `jf auth host alias add <hostname> <alias>`
  
@@ -477,12 +504,17 @@ jf auth host alias add <hostname> <alias>
 ```
  
 Appends `<alias>` to the host's `aliases` list. If the alias already exists on another host, a warning is emitted:
- 
+
 ```
 Warning: alias "home" is already used by jf.home.example.com
 ```
- 
+
 The alias is still added — duplicates are allowed but discouraged.
+
+Routing:
+
+- Human mode: warning is printed to stderr.
+- `--json` mode: warning is included in the JSON envelope metadata (no stderr noise).
 
 If `<alias>` matches an existing host key (e.g. adding alias `nas.local` to some other host), an additional warning is emitted:
 
@@ -514,8 +546,19 @@ Without `<hostname>`: lists all hosts with their aliases. With `<hostname>`: lis
  
 ```
 jf.home.example.com  [home, jf]
-nas.local             [nas, home]  ← WARNING: "home" is also set on jf.home.example.com
+nas.local             [nas, home]
 ```
+
+If duplicates exist, a warning is emitted:
+
+```
+Warning: alias "home" is also set on jf.home.example.com
+```
+
+Routing:
+
+- Human mode: warning is printed to stderr.
+- `--json` mode: warning is included in the JSON envelope metadata (no stderr noise).
  
 ---
  
@@ -525,9 +568,17 @@ These flags are available on all commands, not just `auth`:
  
 | Flag | Env Var | Description |
 |------|---------|-------------|
-| `--server <value>` | `JF_SERVER` | Hostname or full URL to select/override the target server. |
+| `--server <value>` | `JF_SERVER` | Hostname, alias, or full URL to select/override the target server. |
 | `--profile <name>` | `JF_PROFILE` | Profile name to use on the resolved host. |
 | `--config <path>` | `JF_CONFIG` | Path to config file (overrides default location). |
+| `--json` | `JF_OUTPUT` | Emit the JSON envelope contract to stdout (non-interactive). |
+| `--quiet` | | Suppress human-facing output and prompts. |
+| `--dry-run` | | Preview a mutating operation without mutating. |
+| `--yes` | | Skip confirmation prompts for destructive actions. |
+| `--no-color` | `NO_COLOR` | Disable ANSI formatting. |
+| `--verbose` | | Increase diagnostic detail. |
+| `--help` | | Show help. |
+| `--version` | | Show version. |
  
 ---
  
@@ -542,7 +593,7 @@ If `config.json` does not exist but a legacy `credentials.json` is found in the 
 3. Parse the hostname from the server URL.
 4. Create `config.json` with a single host and a single profile named `"default"`.
 5. Set that host as `defaultHost` and `"default"` as `defaultProfile`.
-6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostname}:default:{authKind}`.
+6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostnameKey}:default:{authKind}`.
 7. Rename `credentials.json` to `credentials.json.bak`.
 8. In human mode, print a one-line note to stderr: `Migrated credentials to new profile format. Backup: credentials.json.bak`
  
@@ -620,6 +671,9 @@ The CLI uses atomic file writes (write to temp file, then rename) to prevent cor
  
 | Variable | Description | Equivalent Flag |
 |----------|-------------|-----------------|
-| `JF_SERVER` | Default server hostname or URL | `--server` |
+| `JF_SERVER` | Default server hostname, alias, or URL | `--server` |
 | `JF_PROFILE` | Default profile name | `--profile` |
 | `JF_CONFIG` | Config file path | `--config` |
+| `JF_TOKEN` | Access token override (bypasses secret store) | *(auth override)* |
+| `JF_OUTPUT` | Set to `json` for machine output | `--json` |
+| `NO_COLOR` | Disable ANSI formatting (standard) | `--no-color` |

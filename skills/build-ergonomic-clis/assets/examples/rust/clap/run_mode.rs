@@ -29,6 +29,7 @@ pub enum GuardDecision {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitCategory {
     Success = 0,
+    Runtime = 1,
     Usage = 2,
     NotAuthenticated = 3,
     Network = 8,
@@ -54,15 +55,23 @@ pub fn should_print_header(force: bool, suppress: bool) -> bool {
 pub fn confirm_or_abort(
     mode: RunMode,
     prompt: &str,
-    preview: impl FnOnce() -> String,
+    preview: impl FnOnce(OutputFormat) -> Result<(), CliError>,
 ) -> Result<GuardDecision, CliError> {
     if mode.dry_run {
-        println!("{}", preview());
+        preview(mode.output)?;
         return Ok(GuardDecision::DryRunPrinted);
     }
 
     if mode.yes {
         return Ok(GuardDecision::Continue);
+    }
+
+    if matches!(mode.output, OutputFormat::Json | OutputFormat::Raw) {
+        return Err(CliError {
+            exit: ExitCategory::Usage,
+            message: "confirmation required. Re-run with --yes or --dry-run. Prompts are disabled in machine output modes."
+                .to_string(),
+        });
     }
 
     if mode.quiet || !io::stdin().is_terminal() || !io::stderr().is_terminal() {
@@ -114,7 +123,13 @@ pub fn write_raw_bytes(bytes: &[u8]) -> Result<(), CliError> {
 pub fn print_dry_run(method: &str, url: &str, headers: &[(&str, &str)]) -> Result<(), CliError> {
     println!("{method} {url}");
     for (name, value) in headers {
-        let display = if name.eq_ignore_ascii_case("authorization") || name.eq_ignore_ascii_case("cookie") {
+        let display = if name.eq_ignore_ascii_case("authorization")
+            || name.eq_ignore_ascii_case("cookie")
+            || name.eq_ignore_ascii_case("set-cookie")
+            || name.eq_ignore_ascii_case("x-api-key")
+            || name.eq_ignore_ascii_case("x-auth-token")
+            || name.eq_ignore_ascii_case("x-access-token")
+        {
             "REDACTED"
         } else {
             value
@@ -154,14 +169,14 @@ fn scalar(value: &Value) -> String {
 
 fn io_error(err: io::Error) -> CliError {
     CliError {
-        exit: ExitCategory::Network,
+        exit: ExitCategory::Runtime,
         message: err.to_string(),
     }
 }
 
 fn json_error(err: serde_json::Error) -> CliError {
     CliError {
-        exit: ExitCategory::Usage,
-        message: err.to_string(),
+        exit: ExitCategory::Runtime,
+        message: format!("failed to serialize output: {err}"),
     }
 }

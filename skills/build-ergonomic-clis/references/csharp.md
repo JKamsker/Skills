@@ -1,5 +1,10 @@
 # Implementing a CLI in C#
 
+This is an implementation reference. For the product/UX contract (classification, automation contract, exit codes, non-interactive rules), start with:
+
+- [cli-patterns.md](cli-patterns.md)
+- [service-cli-patterns.md](service-cli-patterns.md) (service-like CLIs only)
+
 ## Stack
 
 ### Generic / local baseline
@@ -12,7 +17,7 @@ For modern .NET CLIs (including local-only tools), prefer this baseline:
 
 This matches the strongest pattern from `jf`: Spectre owns the command surface, while the service container owns runtime wiring.
 
-### Service add-on (HTTP/remote)
+### Service add-on (remote/protocol)
 
 Only if the CLI actually talks to a remote service:
 
@@ -24,10 +29,12 @@ Prefer the small examples in this skill before copying repository code directly:
 
 - [../assets/examples/csharp/spectre/command-tree/Program.cs](../assets/examples/csharp/spectre/command-tree/Program.cs): task-first branch registration with descriptions and a default subcommand.
 - [../assets/examples/csharp/spectre/runtime/GlobalOptions.cs](../assets/examples/csharp/spectre/runtime/GlobalOptions.cs): shared Spectre global flags for host, profile, output, dry-run, and confirmations.
-- [../assets/examples/csharp/spectre/runtime/TargetResolver.cs](../assets/examples/csharp/spectre/runtime/TargetResolver.cs): hostname-key target identity, base URL normalization, and flag/env/config/default precedence (Jellyfin variant).
+- [../assets/examples/csharp/spectre/runtime/TargetResolver.cs](../assets/examples/csharp/spectre/runtime/TargetResolver.cs): hostname-key target identity, base URL normalization, and flag/env/config/default precedence.
 - [../assets/examples/csharp/spectre/runtime/ApiCommand.cs](../assets/examples/csharp/spectre/runtime/ApiCommand.cs): central context resolution, exit-code mapping, and JSON-envelope-safe error reporting.
 - [../assets/examples/csharp/spectre/runtime/DangerousActionGuard.cs](../assets/examples/csharp/spectre/runtime/DangerousActionGuard.cs): TTY-aware confirmation, `--dry-run`, and `--yes`.
 - [../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs](../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs): timestamped diagnostic logs with header redaction.
+
+Note: the Jellyfin worked example uses a **host → profiles** config shape. The small resolver example assets prioritize the identity-key and precedence rules and use a simplified flat profile store to keep the sketch compact.
 
 ## Application Shape
 
@@ -65,8 +72,8 @@ src/MyCli/
 
 Reference pattern:
 
-- `Jellyfin-Cli/src/Jellyfin.Cli/Program.cs`
-- `Jellyfin-Cli/src/Jellyfin.Cli/Common/GlobalSettings.cs`
+- `Jellyfin-Cli/src/Jellyfin.Cli/Program.cs` (external repository)
+- `Jellyfin-Cli/src/Jellyfin.Cli/Common/GlobalSettings.cs` (external repository)
 
 Structure rules:
 
@@ -145,6 +152,7 @@ Rules:
 - If a command file approaches 500 LOC, refactor by extracting collaborators, not by slicing the command into `partial` files.
 - Use `Validate()` on settings when the framework path is simple enough.
 - Prefer repeatable options to comma-separated user input.
+- Also respect the `NO_COLOR` environment variable (see `cli-patterns.md`).
 
 ## Local Project Discovery and Process Execution
 
@@ -170,7 +178,7 @@ Recommended split:
 
 - Non-secret config in a config file
 - Secrets in a secure store where possible
-- Canonical host keys for matching credentials to targets
+- Chosen target identity keys for matching credentials to targets
 
 Guardrails:
 
@@ -187,7 +195,7 @@ Use Spectre rich output for humans, but keep automation stable.
 - Inject `IAnsiConsole` into commands instead of using static `AnsiConsole`.
 - Send structured machine output through a single serializer path.
 - Keep `--json` behavior identical across commands.
-- Print prompts and warnings on stderr when practical.
+- Prompt on stderr, not stdout. In machine modes, avoid ad hoc stderr chatter; represent warnings/diagnostics in the machine contract metadata when possible.
 
 If the command can emit either tables or JSON, make that switch early in the command handler so the rest of the logic stays clean.
 
@@ -221,7 +229,7 @@ Rules:
 
 Keep secret input separate from normal prompts. Use a no-echo prompt implementation for passwords and tokens.
 
-## HTTP Client Layer
+## Protocol Client Layer
 
 Use typed clients or a factory abstraction instead of making requests directly in commands.
 
@@ -245,7 +253,7 @@ Within a feature:
 
 ## Diagnostics and Logging
 
-Capture the last HTTP exchange so that every error can be reported with full context.
+Capture the last protocol exchange so that every error can be reported with full context. HTTP is a common case; for non-HTTP transports, capture the equivalent handshake/exchange metadata.
 
 Recommended approach:
 

@@ -71,12 +71,11 @@ Reserve consistent flags and branches for consistent jobs.
 - `-h`, `--help`: help
 - `-V`, `--version` or `-v` only if your framework already owns it consistently
 - `--dry-run`: preview a mutating operation without side effects; prefer this as the primary safety flag
-- `-f`, `--force`: bypass safety checks or conflict prompts when that meaning exists in the tool
 - `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect
 - `--json` or `--output json`: stable machine output
 - `--verbose` or `-v`: increase output detail; repeat for more (`-vv`, `-vvv`) if the tool has multiple verbosity tiers
 - `--no-color`: disable ANSI formatting; also respect the `NO_COLOR` environment variable (see https://no-color.org/)
-- `--quiet`: suppress human-oriented banners and prompts
+- `--quiet`: suppress human-oriented banners, status chatter, and prompts
 - `auth`: the branch for authentication, identity, sessions, tokens, and profiles
 
 Do not overload a familiar flag with an unrelated meaning.
@@ -118,7 +117,7 @@ Rules:
 
 - Machine output modes (`--json`, `--output json`, porcelain modes) are non-interactive: no prompts, no browser launches, no banners.
 - If a prompt is required and the tool is in `--quiet` mode, fail (exit `2`) and tell the user to pass the missing flag, use `--dry-run` to inspect first, or use `--yes` only when bypassing a destructive confirmation is intentional.
-- If a command supports interactive prompts, only do so when stdin and stderr are TTYs.
+- If a command supports interactive prompts, only do so when stdin and stderr are TTYs. If a prompt would be required but a TTY is not available, refuse (exit `2`) with an actionable message.
 - Prompt on stderr, not stdout.
 - Secret prompts must not echo.
 
@@ -148,6 +147,13 @@ Support one (or both) of these styles, but the design must say which applies:
   - Bare object/array/scalar, JSONL streams, or value-only output.
   - Good when the command behaves like a filter and wrappers add friction.
 
+The design must also state whether the choice is:
+
+- global (the whole CLI uses one contract style), or
+- command-specific (some commands are envelope while others are direct-value).
+
+If contract style is command-specific, each affected command must document its style and its failure representation.
+
 ### Contract versioning (mandatory)
 
 Machine contracts must be versioned:
@@ -155,7 +161,35 @@ Machine contracts must be versioned:
 - In-band: `meta.schemaVersion = 1`
 - Selector: `--porcelain=v1`, `--format-version 1`, `--output json-v1`
 
+If the machine output is a **direct-value contract** (arrays/scalars/JSONL), versioning usually cannot be carried in-band. Prefer an explicit selector:
+
+- `--porcelain=v1` (recommended for commands that need structured errors)
+- `--format-version 1` or `--output json-v1` (recommended for value-only JSON output)
+
+If the CLI also provides a convenience flag like `--json`, define it precisely (e.g. "`--json` selects the default stable machine contract version, currently v1") so scripts can rely on it.
+
 Human output can evolve more freely. Machine output must have an explicit stability boundary.
+
+### Failure representation
+
+- **Envelope contract**: represent expected failures as a JSON envelope on stdout (`ok: false`) with a stable `error.kind` and actionable recovery guidance when possible.
+- **Direct-value contract**: keep stdout value-only; represent errors on stderr and via exit codes. If you need structured errors in direct-value mode, use a separate opt-in selector (porcelain vN) instead of silently changing the contract.
+
+Exit codes still matter for automation:
+
+- `ok: true` responses MUST exit `0`.
+- `ok: false` responses MUST exit non-zero (use the exit-code taxonomy below).
+
+For direct-value contracts that do not have an `ok` field:
+
+- Success MUST exit `0`.
+- Failures MUST exit non-zero (and keep stdout value-only).
+
+### Schema evolution expectations
+
+- Prefer additive changes (new optional fields) within a schema version.
+- Do not repurpose existing fields with incompatible meanings.
+- Breaking changes require a new schema version or an explicit opt-in selector.
 
 ### Stdout vs stderr routing
 
@@ -163,13 +197,14 @@ The design must state its routing rule and keep it consistent.
 
 Recommended defaults:
 
-- **Envelope-style commands**: success and expected structured failures on stdout; stderr reserved for pre-contract or infrastructural failures.
+- **Envelope-style commands**: success and expected failures are emitted as an envelope on stdout; stderr is reserved for cases where you cannot emit the machine contract (early bootstrap failures, malformed output selection flags, etc.).
 - **Direct-value/pipeline commands**: value output on stdout; errors on stderr.
 
 Regardless of style:
 
-- Do not print banners, prompts, or warnings to stdout when machine mode is enabled.
+- Do not print banners, prompts, or **human-formatted warning lines** to stdout when machine mode is enabled.
 - Redact secrets in all output (including errors and diagnostics).
+- In machine modes, prefer structured warnings inside the machine contract (`meta.warnings`, porcelain fields, etc.) over ad hoc stderr chatter.
 
 ## Output and Exit Codes
 
@@ -178,7 +213,9 @@ Treat human and machine output as separate contracts.
 - Default to readable human output.
 - Provide stable machine output with `--json` or `--output json`.
 - Keep machine output on stdout.
-- Send warnings, banners, and prompts to stderr.
+- Prompt on stderr, not stdout.
+- In human modes, send warnings and banners to stderr.
+- In machine modes, avoid ad hoc stderr noise (banners/progress/warnings); prefer structured warnings/diagnostic paths inside the machine contract metadata. (Errors are still allowed on stderr for direct-value contracts.)
 - Redact secrets in human output and config dumps.
 - Use explicit exit codes for common failure classes.
 
@@ -188,7 +225,7 @@ Treat human and machine output as separate contracts.
 - `1`: general or unclassified error (catch-all for failures that do not fit a specific category)
 - `2`: usage / validation / interaction-required / non-interactive refusal
 - `5`: not found
-- `6`: conflict
+- `6`: conflict / precondition failed
 - `10`: explicit user cancellation / abort / SIGINT-equivalent
 
 ### Service extension exit codes (service-like CLIs only)
@@ -216,7 +253,7 @@ Flag interaction rules:
 | `--yes` | Skip the confirmation prompt and execute. |
 | `--dry-run --yes` | `--dry-run` wins. Print the preview and exit without mutating. |
 | `--quiet` | If confirmation would be required, fail (exit `2`) with an error telling the user to pass `--yes` or `--dry-run`. Never prompt. |
-| `--quiet --yes` | Skip the confirmation prompt and execute silently. |
+| `--quiet --yes` | Skip the confirmation prompt and execute. In human mode, this may be silent on success; in machine mode, stdout still carries the machine contract. |
 | `--quiet --dry-run` | Print the preview and exit. No prompts, no mutation. |
 
 When a prompt is shown and the user declines, treat it as explicit cancellation (exit `10`).
@@ -225,10 +262,13 @@ When a prompt is shown and the user declines, treat it as explicit cancellation 
 
 Define `--quiet` precisely:
 
-- Suppresses non-essential human-facing output.
+- Suppresses non-essential human-facing output (status chatter, banners, progress).
 - Suppresses prompts (never blocks waiting for interaction).
 - Never suppresses machine stdout.
-- Never changes success/failure semantics or exit codes.
+- Never turns a failure into a success. If the command would prompt, it must refuse (exit `2`) unless the user passed `--yes` or `--dry-run`.
+- Does not suppress primary command output (tables/value output) unless the command explicitly documents that it is safe to do so.
+- Suppresses warnings unless they affect correctness (for example: partial results, ambiguous target selection, or a fallback that changes which resource is acted on).
+- Suppresses "diagnostic log saved to ..." hints; the log file may still be written.
 - May still write diagnostic artifacts according to policy.
 
 ## Dry-Run Semantics (`--dry-run`)
@@ -299,7 +339,8 @@ Recommended approach:
   - The full exception or error chain.
 - Store diagnostic files in a dedicated logs directory inside the CLI config directory (e.g., `~/.config/tool/logs/` or `%APPDATA%\tool\logs\`).
 - Name files with a timestamp so they do not collide: `tool-error-20260316-141523-042.log`.
-- Print a hint to stderr when a diagnostic file is written: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523-042.log`
+- In human output modes, print a hint to stderr when a diagnostic file is written: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523-042.log`
+- In machine output modes, avoid extra stderr noise; include the diagnostic path in machine output metadata (envelope `meta`, porcelain fields, etc.).
 - Suggest including the log when reporting issues: `Include this file when reporting a bug.`
 
 For protocol/service-specific diagnostic logging (exchange capture, auth header redaction), see [service-cli-patterns.md](service-cli-patterns.md).
@@ -329,17 +370,17 @@ The bundled reference repos converge on a small set of patterns worth teaching d
 - Build one visible command tree in one place, and group by user task rather than transport or backend tags.
   - [../assets/examples/csharp/spectre/command-tree/Program.cs](../assets/examples/csharp/spectre/command-tree/Program.cs) shows the same "auth / projects / server" branch style without repo-specific surface area.
 - Treat machine mode as a first-class contract instead of a formatter toggle.
-  - The right shape is stable JSON, stderr for warnings, `--dry-run`, `--yes`, `--quiet`, and TTY-aware table headers. See [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs).
+  - The right shape is stable JSON, structured warnings in machine metadata (and prompts on stderr), `--dry-run`, `--yes`, `--quiet`, and TTY-aware table headers. See [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs).
 - Pair user-facing recovery instructions with saved diagnostics.
   - The distilled runtime pieces are [../assets/examples/csharp/spectre/runtime/ApiCommand.cs](../assets/examples/csharp/spectre/runtime/ApiCommand.cs) and [../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs](../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs).
 
-For service-CLI-specific patterns (target/profile/auth resolution, canonical host keys), see [service-cli-patterns.md](service-cli-patterns.md).
+For service-CLI-specific patterns (target/profile/auth resolution, chosen target identity keys), see [service-cli-patterns.md](service-cli-patterns.md).
 
 ## Local Cautions
 
 The same reference repos also show where ergonomic CLIs go wrong:
 
-- Do not print warnings to stdout when the command also supports JSON, piping, or raw output. Use stderr.
+- Do not print warnings to stdout when the command also supports JSON, piping, or raw output. In machine modes, prefer structured warnings in machine metadata (envelope `meta` / porcelain fields); for direct-value/pipeline commands without metadata, use stderr.
 - Do not emulate fake subcommands with positional parsing or expose global flags that are not actually wired up.
 
 For service-CLI-specific cautions (plaintext secrets, auth logging, silent profile picking), see [service-cli-patterns.md](service-cli-patterns.md).

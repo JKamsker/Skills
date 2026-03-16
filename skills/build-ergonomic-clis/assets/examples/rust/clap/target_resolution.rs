@@ -1,5 +1,12 @@
 use url::Url;
 
+// This example shows *context inference* for a git-like CLI.
+//
+// Design choices in this sketch:
+// - Network operations use a normalized base URL (scheme + host + non-default port), dropping path/query/fragment.
+// - Remote inference only yields a hostname (and optionally a port); scheme comes from explicit inputs or defaults.
+// - Identity comparisons for selecting a git remote use a hostname-key (lowercased hostname), not an origin-key.
+
 #[derive(Debug, Clone)]
 pub struct RepoArg {
     pub host: Option<String>,
@@ -55,7 +62,9 @@ pub fn resolve_target(
         if let Some(remote) = select_remote(remotes, args.remote.as_deref(), args.host.as_deref())? {
             if let Some((host, repo)) = remote_url_to_host_and_repo(&remote.url)? {
                 resolved_base_url.get_or_insert(normalize_base_url(&host)?);
-                resolved_repo.get_or_insert(repo);
+                if let Some(repo) = repo {
+                    resolved_repo.get_or_insert(repo);
+                }
             }
         }
     }
@@ -110,17 +119,27 @@ pub fn normalize_base_url(raw: &str) -> Result<String, CliError> {
         .host_str()
         .ok_or_else(|| CliError("url is missing host".to_string()))?;
 
-    let port = url.port().map(|port| format!(":{port}")).unwrap_or_default();
-    Ok(format!("{}://{}{}", url.scheme(), host, port))
+    let scheme = url.scheme().to_ascii_lowercase();
+    let default_port = match scheme.as_str() {
+        "http" => Some(80),
+        "https" => Some(443),
+        _ => None,
+    };
+
+    let port = match (url.port(), default_port) {
+        (Some(port), Some(default_port)) if port != default_port => format!(":{port}"),
+        (Some(port), None) => format!(":{port}"),
+        _ => String::new(),
+    };
+
+    Ok(format!("{scheme}://{host}{port}"))
 }
 
-pub fn normalize_host_key(raw: &str) -> Result<String, CliError> {
+pub fn hostname_identity_key(raw: &str) -> Result<String, CliError> {
     let base = normalize_base_url(raw)?;
     let url = Url::parse(&base).map_err(|err| CliError(format!("invalid host: {err}")))?;
-    Ok(match url.port() {
-        Some(port) => format!("{}:{port}", url.host_str().unwrap_or_default()),
-        None => url.host_str().unwrap_or_default().to_string(),
-    })
+    let host = url.host_str().unwrap_or_default();
+    Ok(host.to_ascii_lowercase())
 }
 
 fn select_remote<'a>(
@@ -141,12 +160,12 @@ fn select_remote<'a>(
     }
 
     if let Some(host_hint) = host_hint {
-        let host_key = normalize_host_key(host_hint)?;
+        let host_key = hostname_identity_key(host_hint)?;
         if let Some(remote) = remotes.iter().find(|remote| {
             remote_url_to_host_and_repo(&remote.url)
                 .ok()
                 .flatten()
-                .map(|(host, _)| normalize_host_key(&host).ok().as_deref() == Some(host_key.as_str()))
+                .map(|(host, _)| hostname_identity_key(&host).ok().as_deref() == Some(host_key.as_str()))
                 .unwrap_or(false)
         }) {
             return Ok(Some(remote));
@@ -160,11 +179,19 @@ fn select_remote<'a>(
     Ok(remotes.first())
 }
 
-fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, String)>, CliError> {
+fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, Option<String>)>, CliError> {
     let url = parse_remote_url(raw)?;
     let host = url
         .host_str()
         .ok_or_else(|| CliError("remote url missing host".to_string()))?;
+
+    // Only propagate ports for http(s) remotes. For ssh/scp-style remotes, the port is not
+    // meaningful for an https base URL and would create mismatched targets.
+    let port = match url.scheme() {
+        "http" | "https" => url.port().map(|port| format!(":{port}")).unwrap_or_default(),
+        _ => String::new(),
+    };
+    let host_with_port = format!("{host}{port}");
 
     let mut segments = url
         .path_segments()
@@ -172,13 +199,17 @@ fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, String)>, Cl
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>();
 
-    if segments.len() < 2 {
-        return Ok(None);
-    }
+    let repo = match segments.len() {
+        0 => None,
+        1 => None,
+        _ => {
+            let name = segments.pop().unwrap().trim_end_matches(".git");
+            let owner = segments.join("/");
+            Some(format!("{owner}/{name}"))
+        }
+    };
 
-    let name = segments.pop().unwrap().trim_end_matches(".git");
-    let owner = segments.pop().unwrap();
-    Ok(Some((host.to_string(), format!("{owner}/{name}"))))
+    Ok(Some((host_with_port, repo)))
 }
 
 fn parse_remote_url(raw: &str) -> Result<Url, CliError> {
@@ -186,12 +217,52 @@ fn parse_remote_url(raw: &str) -> Result<Url, CliError> {
         return Ok(url);
     }
 
-    let at_index = raw
-        .find('@')
-        .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?;
+    if raw.contains("://") {
+        return Err(CliError(format!("unable to parse remote url '{raw}'")));
+    }
+
+    let (user_prefix, host_and_path) = match raw.split_once('@') {
+        Some((user, rest)) => (format!("{user}@"), rest),
+        None => (String::new(), raw),
+    };
+
+    let (host, path) = split_scp_host_and_path(host_and_path)?;
+
     let mut rewritten = String::from("ssh://");
-    rewritten.push_str(&raw[..at_index]);
-    rewritten.push_str(&raw[at_index..].replacen(':', "/", 1));
+    rewritten.push_str(&user_prefix);
+    rewritten.push_str(host);
+    rewritten.push('/');
+    rewritten.push_str(path);
 
     Url::parse(&rewritten).map_err(|err| CliError(format!("unable to parse remote url '{raw}': {err}")))
+}
+
+fn split_scp_host_and_path(raw: &str) -> Result<(&str, &str), CliError> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Err(CliError("remote url is empty".to_string()));
+    }
+
+    let sep_index = if trimmed.starts_with('[') {
+        let end = trimmed
+            .find(']')
+            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?;
+        if trimmed.get(end + 1..end + 2) != Some(":") {
+            return Err(CliError(format!("unable to parse remote url '{raw}'")));
+        }
+        end + 1
+    } else {
+        trimmed
+            .find(':')
+            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?
+    };
+
+    let host = trimmed[..sep_index].trim();
+    let path = trimmed[sep_index + 1..].trim();
+
+    if host.is_empty() || path.is_empty() {
+        return Err(CliError(format!("unable to parse remote url '{raw}'")));
+    }
+
+    Ok((host, path))
 }

@@ -1,5 +1,10 @@
 # Implementing a CLI in Rust
 
+This is an implementation reference. For the product/UX contract (classification, automation contract, exit codes, non-interactive rules), start with:
+
+- [cli-patterns.md](cli-patterns.md)
+- [service-cli-patterns.md](service-cli-patterns.md) (service-like CLIs only)
+
 ## Stack
 
 ### Generic / local baseline
@@ -11,7 +16,7 @@ For ergonomic Rust CLIs (including local-only tools), prefer this baseline:
 - `thiserror` or `eyre` for error layering
 - `clap_complete` if shell completions matter
 
-### Service add-on (HTTP/remote)
+### Service add-on (remote/protocol)
 
 Only if the CLI actually talks to a remote service:
 
@@ -27,9 +32,11 @@ The local references split into two good patterns:
 
 Prefer the small examples in this skill before copying repository code directly:
 
-- [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs): hostname-key target identity + base URL split, profile resolution, and secret-store lookup (Jellyfin variant).
+- [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs): hostname-key target identity + base URL split, profile resolution, and secret-store lookup.
 - [../assets/examples/rust/clap/target_resolution.rs](../assets/examples/rust/clap/target_resolution.rs): layered `--host` / `--repo` / `--remote` / env fallback target inference inspired by `fj-ex`.
 - [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs): machine-vs-human output, `--dry-run`, `--yes`, TTY-aware prompts, raw bytes, and exit categories.
+
+Note: the Jellyfin worked example uses a **host → profiles** config shape. The small resolver example assets prioritize the identity-key and precedence rules and use a simplified flat profile store to keep the sketch compact.
 
 ## CLI Structure
 
@@ -122,12 +129,12 @@ Recommended precedence:
 For self-hosted service CLIs:
 
 - Store host defaults separately from profile definitions.
-- Canonicalize host keys before matching.
+- Derive the chosen target identity key before matching (hostname/origin/base-URL, as documented).
 - Only reuse stored credentials when the selected profile host matches the target host.
 
 Reference pattern:
 
-- `ztnet-cli/src/context.rs`
+- `ztnet-cli/src/context.rs` (external repository)
 
 ## Local Project Discovery and Process Execution
 
@@ -193,7 +200,7 @@ Keep one output abstraction for humans and machines.
 
 - Table or rich human output by default
 - `--json` or `--output json` for stable machine output
-- warnings and prompts on stderr
+- prompts on stderr; in machine modes, avoid ad hoc stderr chatter and prefer structured warnings/diagnostics in machine output metadata when possible
 - secret redaction in config or auth displays
 
 If the tool has a `--dry-run` mode, print the resolved request shape and exit before making network calls.
@@ -214,7 +221,7 @@ Suggested categories:
 
 Do not bury recovery instructions in debug logs. Put the recovery command in the user-facing error.
 
-## HTTP Layer
+## Protocol Layer
 
 Keep HTTP and parsing away from clap structs.
 
@@ -233,7 +240,7 @@ Reference pattern:
 
 ## Diagnostics and Logging
 
-Capture HTTP exchange details so that errors can be reported with full context.
+Capture protocol exchange details so that errors can be reported with full context. HTTP is a common case; for non-HTTP transports, capture the equivalent handshake/exchange metadata.
 
 Recommended approach:
 

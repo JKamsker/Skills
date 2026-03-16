@@ -8,6 +8,8 @@ Use this checklist when editing this skill. Check items before considering chang
 - [ ] `references/cli-patterns.md` defines the automation contract (styles + versioning + routing) and other docs do not contradict it.
 - [ ] `references/service-cli-patterns.md` treats target identity as a design choice (hostname/origin/base-URL) and does not imply one universal canonical key.
 - [ ] Worked examples (e.g. Jellyfin) are explicitly labeled as choices, not universal policy.
+- [ ] Hybrid designs state which branches require service patterns and which are local-only (section-loading is explicit).
+- [ ] Multi-surface service designs document per-surface defaults and precedence (no implicit cross-surface bleed).
 
 ## Target identity + secrets
 
@@ -25,4 +27,9 @@ Use this checklist when editing this skill. Check items before considering chang
 
 - [ ] Machine contract examples match one of the allowed styles (envelope or direct-value) and are versioned.
 - [ ] Machine stdout is not polluted by banners/prompts/warnings in machine modes.
+- [ ] Direct-value / JSONL pipeline designs keep stdout value-only under failures (errors on stderr + exit codes).
 - [ ] Service-specific guidance does not leak HTTP-only assumptions into generic guidance.
+
+## Local-only discovery
+
+- [ ] Local-only discovery rules are deterministic and documented (walking, stop conditions, override flags, and surfaced resolution in `--dry-run`/`--verbose`).

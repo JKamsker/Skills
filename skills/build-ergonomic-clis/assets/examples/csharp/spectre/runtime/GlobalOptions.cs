@@ -9,7 +9,7 @@ public enum OutputMode
     Json,
 }
 
-public sealed class GlobalOptions : CommandSettings
+public class GlobalOptions : CommandSettings
 {
     [CommandOption("-H|--host <URL>")]
     [Description("Service base URL")]
@@ -31,9 +31,9 @@ public sealed class GlobalOptions : CommandSettings
     [Description("Suppress banners and prompts")]
     public bool Quiet { get; init; }
 
-    [CommandOption("-v|--verbose")]
+    [CommandOption("--verbose")]
     [Description("Increase diagnostic detail")]
-    public int Verbose { get; init; }
+    public bool Verbose { get; init; }
 
     [CommandOption("--dry-run")]
     [Description("Print the request plan and exit without mutating")]

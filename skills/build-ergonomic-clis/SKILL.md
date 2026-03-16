@@ -59,7 +59,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 #### Additional rules for service CLIs
 
 - Fail fast when auth or target resolution is missing. Do not start an interactive login flow from an unrelated command.
-- Keep credentials separate from general config, and bind stored credentials to a canonical host key.
+- Keep credentials separate from general config, and bind stored credentials to the **chosen target identity key** (hostname/origin/base-URL mode as documented for the CLI).
 
 ## Definition of Done
 
@@ -67,7 +67,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 - Make global flags, reserved flags, environment variables, and config/default precedence explicit.
 - Define human output, machine output, stdout vs stderr rules, confirmation rules, and exit codes.
 - Include language-specific implementation notes only when implementation is in scope. For other languages, provide framework-agnostic guidance.
-- Include three to five validation checks or tests covering help, target resolution, non-interactive behavior, destructive flows, or machine-readable output.
+- Include three to five validation checks or tests covering help, target resolution, non-interactive behavior, destructive flows, or machine-readable output. Use [tests/scenario-checklist.md](tests/scenario-checklist.md) and [tests/regression-checks.md](tests/regression-checks.md) as starting points.
 
 #### Additional items for service CLIs
 
@@ -87,12 +87,12 @@ When implementing or redesigning a CLI, produce these artifacts unless the user 
 - Output modes and exit codes.
 - Error message strategy, diagnostic logging, and verbosity levels.
 - Implementation notes only when implementation is in scope; otherwise keep it framework-agnostic.
-- Three to five validation checks or tests.
+- Three to five validation checks or tests (see [tests/scenario-checklist.md](tests/scenario-checklist.md)).
 
 #### Additional deliverables for service CLIs
 
 - Auth, host, profile, and fallback-host behavior.
-- Auth storage model and any canonical host-key rules.
+- Auth storage model and the chosen target identity mode + normalization rules.
 
 ## Pre-Implementation Extraction Checklist
 

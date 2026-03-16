@@ -20,6 +20,7 @@ For browser-capable service CLIs:
 
 - Prefer system browser plus PKCE or a service-native device/quick-connect flow.
 - Fall back to pasted tokens only when the service actually uses them.
+- In machine output modes (`--json`, porcelain), never auto-launch a browser or show interactive prompts. Require an explicit non-interactive path (`--device`, `--token-stdin`, etc.) or refuse (exit `2`).
 
 For API-token-based CLIs:
 
@@ -28,7 +29,7 @@ For API-token-based CLIs:
 
 ## Targets, Profiles/Contexts, Defaults
 
-Service-like CLIs need an explicit target model. Recommended model:
+Service-like CLIs (service-native tools and the remote-facing branches of hybrid tools) need an explicit target model. Recommended model:
 
 - A **profile/context** stores non-secret defaults (timeouts, output mode, default scope) plus target binding metadata.
 - **Credentials are bound to a derived target identity key** (not just a profile name).
@@ -48,7 +49,7 @@ tool config set
 
 ## Target Identity Modes (design choice)
 
-There is no single universal “canonical host key”. Service-like CLIs must choose a target identity mode and document:
+There is no single universal target identity key. Service-like CLIs must choose a target identity mode and document:
 
 - which mode is chosen
 - why it is correct for the tool
@@ -113,10 +114,11 @@ Every service-like CLI should present a one-page resolution sequence. A good tem
 2. Read **environment variables** (mirroring flags).
 3. Resolve **explicit profile/context/account selection** (if provided).
 4. Apply **defaults** (global default, per-target default, single-entry inference).
-5. Apply **alias rewrites** (if supported) and emit warnings on ambiguity.
-6. Derive the **target identity key** (per the chosen mode).
-7. Look up **credentials** using the identity key (and the selected profile/context if applicable).
-8. Produce the final **effective target** used for network operations (base URL, timeouts, retries).
+5. If still unresolved and you support it, apply **context inference** (git remotes, workspace markers, directory discovery) and make it inspectable.
+6. Apply **alias rewrites** (if supported) and emit warnings on ambiguity.
+7. Derive the **target identity key** (per the chosen mode).
+8. Look up **credentials** using the identity key (and the selected profile/context if applicable).
+9. Produce the final **effective target** used for network operations (base URL, timeouts, retries).
 
 Rules:
 
@@ -281,7 +283,10 @@ Non-HTTP example:
 ## Distilled Patterns (Service)
 
 - Resolve target/profile/auth once in shared runtime code instead of scattering through commands.
-- Make inference layered, inspectable, and reversible (flags → git context → env fallback).
+- Make inference layered, inspectable, and reversible:
+  - resolve explicit inputs first (flags, env, config/profile defaults)
+  - then apply context inference (git remotes, directory markers, etc.) only when needed
+  - if you support fallback env vars (not mirroring explicit flags), document where they sit relative to other inference sources
 - Bind stored credentials to the chosen target identity key and refuse to silently reuse across mismatched targets.
 
 ## Local Cautions (Service)
