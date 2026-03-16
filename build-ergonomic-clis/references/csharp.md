@@ -220,7 +220,7 @@ Within a feature:
 
 Cover both parsing and behavior.
 
-- Use `Spectre.Console.Cli.Testing` for command-app tests.
+- Use `Spectre.Console.Testing` for command-app tests.
 - Test help text for important branches.
 - Test settings validation.
 - Test host/profile resolution independently from command handlers.

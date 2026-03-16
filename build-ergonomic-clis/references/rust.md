@@ -4,9 +4,10 @@
 
 For ergonomic Rust CLIs, prefer this baseline:
 
-- `clap` derive API for parsing and help
+- `clap` derive API for parsing and help (enable the `env` feature for `#[arg(env = "...")]` support)
 - `serde` and `serde_json` for machine output
-- `reqwest` for HTTP
+- `reqwest` for HTTP (async by default; pair with `tokio` as the async runtime)
+- `tokio` with `#[tokio::main]` for async entry point; use `reqwest::blocking` only if the CLI is entirely synchronous
 - `thiserror` or `eyre` for error layering
 - `clap_complete` if shell completions matter
 
@@ -71,7 +72,8 @@ pub struct Cli {
 Use clap features deliberately:
 
 - `#[command(subcommand)]` for branches
-- `#[arg(env = "...")]` for env vars
+- `#[command(flatten)]` to share global flags across subcommands (equivalent to the `GlobalSettings` base class in C#)
+- `#[arg(env = "...")]` for env vars (requires clap's `env` feature)
 - `conflicts_with` for mutually exclusive flags
 - `requires` for dependent flags
 - `value_enum` for controlled string values

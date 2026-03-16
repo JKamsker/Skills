@@ -70,7 +70,8 @@ Reserve consistent flags and branches for consistent jobs.
 - `-f`, `--force`: bypass safety checks or conflict prompts when that meaning exists in the tool
 - `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect
 - `--json` or `--output json`: stable machine output
-- `--no-color`: disable ANSI formatting
+- `--verbose` or `-v`: increase output detail; repeat for more (`-vv`, `-vvv`) if the tool has multiple verbosity tiers
+- `--no-color`: disable ANSI formatting; also respect the `NO_COLOR` environment variable (see https://no-color.org/)
 - `--quiet`: suppress human-oriented banners and prompts
 - `auth`: the branch for authentication, identity, sessions, tokens, and profiles
 
@@ -206,6 +207,7 @@ Treat human and machine output as separate contracts.
 Suggested exit code set:
 
 - `0`: success
+- `1`: general or unclassified error (catch-all for failures that do not fit a specific category)
 - `2`: usage or validation error
 - `3`: not authenticated
 - `4`: authorization failed
@@ -223,6 +225,18 @@ Suggested exit code set:
 - Show `--dry-run` in help and examples before showing the real mutating command.
 - In non-interactive contexts, fail instead of prompting.
 - Make destructive behavior visible in help and examples.
+
+Flag interaction rules:
+
+| Flags passed | Behavior |
+|---|---|
+| (none) | Prompt for confirmation if the command is destructive. |
+| `--dry-run` | Print a preview of the operation and exit. Never prompt, never mutate. |
+| `--yes` | Skip the confirmation prompt and execute. |
+| `--dry-run --yes` | `--dry-run` wins. Print the preview and exit without mutating. |
+| `--quiet` | If confirmation would be required, fail with an error telling the user to pass `--yes` or `--dry-run`. Never prompt. |
+| `--quiet --yes` | Skip the confirmation prompt and execute silently. |
+| `--quiet --dry-run` | Print the preview and exit. No prompts, no mutation. |
 
 ## Design Checklist
 
