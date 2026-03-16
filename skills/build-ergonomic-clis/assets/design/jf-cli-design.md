@@ -73,7 +73,7 @@ jf
  |-- auth                          Authentication, identity, and profiles
  |    |-- login                    Authenticate by username/password (returns token)
  |    |-- login --quick-connect    Authenticate via Quick Connect flow
- |    |-- logout                   End current session and discard stored token
+ |    |-- logout                   Best-effort revoke and remove stored credential
  |    |-- status                   Show current auth state (user, server, token expiry)
  |    |-- whoami                   Show the authenticated user (GET /Users/Me)
  |    |-- set-token                Store a pre-existing token (supports --stdin)
@@ -387,7 +387,7 @@ These flags are available on every command via `GlobalSettings`:
 
 | Flag | Short | Type | Description |
 |---|---|---|---|
-| `--server <value>` | `-S` | string | Hostname, alias, or full URL of the target Jellyfin server |
+| `--server <value>` | `-S` | string | Hostname, alias, scheme-less `host:port`, or full URL of the target Jellyfin server |
 | `--profile <NAME>` | | string | Use a specific saved profile |
 | `--config <path>` | | string | Path to config file (overrides default location) |
 | `--json` | | bool | Output stable machine-readable JSON to stdout |
@@ -399,7 +399,7 @@ These flags are available on every command via `GlobalSettings`:
 | `--help` | `-h` | bool | Show help (Spectre built-in) |
 | `--version` | `-V` | bool | Show version (Spectre built-in) |
 
-**Note**: The generic pattern in `references/service-cli-patterns.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a bare hostname, or an alias — not strictly a hostname.
+**Note**: The generic pattern in `references/service-cli-patterns.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a scheme-less `host:port`, a bare hostname, or an alias — not strictly a hostname.
 
 **Note**: This CLI intentionally avoids a global “force” flag. Use `--dry-run` to preview and `--yes` to bypass destructive confirmations.
 
@@ -407,7 +407,7 @@ These flags are available on every command via `GlobalSettings`:
 public class GlobalSettings : CommandSettings
 {
     [CommandOption("-S|--server <VALUE>")]
-    [Description("Jellyfin server (hostname, alias, or full URL)")]
+    [Description("Jellyfin server (hostname, alias, scheme-less host:port, or full URL)")]
     public string? Server { get; set; }
 
     [CommandOption("--profile <NAME>")]
@@ -468,7 +468,15 @@ jf auth test
 jf auth profiles list
 jf auth profiles use <name>
 jf auth profiles show [<name>]
+jf auth profiles rename <old> <new>
 jf auth profiles delete <name>
+jf auth host list
+jf auth host use <hostname>
+jf auth host rename <old> <new>
+jf auth host delete <hostname>
+jf auth host alias add <hostname> <alias>
+jf auth host alias remove <hostname> <alias>
+jf auth host alias list [<hostname>]
 jf auth api-keys list
 jf auth api-keys create <name>
 jf auth api-keys delete <key>
@@ -478,7 +486,7 @@ jf auth api-keys delete <key>
 
 1. Resolve host from `--server` flag, `JF_SERVER` env var, config default, or single-entry inference; otherwise fail.
 2. If `--quick-connect`:
-    a. In `--json` mode, refuse (exit `2`): Quick Connect is interactive and requires user-visible prompts/codes.
+    a. In machine output modes (`--json`), refuse (exit `2`): Quick Connect is interactive and requires user-visible prompts/codes.
     b. Check GET /QuickConnect/Enabled. If disabled, fail with message.
     c. POST /QuickConnect/Initiate to get a code.
     d. Display code to user on stderr.
@@ -492,7 +500,7 @@ jf auth api-keys delete <key>
     d. If TTY present and no `--password-stdin`, prompt for password on stderr with no-echo.
     e. If no TTY and no `--password-stdin`, fail: `Password required. Use --password-stdin or run interactively.`
     f. POST /Users/AuthenticateByName with username and password.
-    g. Store the returned credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{authKind}` (hostname-key identity + profile name + credential kind).
+    g. Store the returned credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (hostname-key identity + profile name + credential kind).
 4. Save or update a profile entry in config.
 5. In human output modes, print the username and server on stderr to confirm. In `--json` mode, include these as structured metadata in the JSON envelope (avoid ad hoc stderr noise).
 
@@ -523,7 +531,7 @@ The CLI never opens a login prompt from a non-auth command. Ever.
   - moves the credential into the secret store
   - writes the new `config.json` (creates `hosts[hostnameKey]` and a `"default"` profile, and sets `defaultHost` / `defaultProfile`)
   - backs up `credentials.json` to `credentials.json.bak`
-  - emits a brief stderr note in human mode (no noisy output in machine mode)
+  - emits a brief stderr note in human mode (no noisy output in machine output mode)
 
 ### `jf auth set-token`
 
@@ -546,7 +554,7 @@ Resolution is a two-step process: resolve the host, then resolve the profile wit
 
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--server <value>` flag | Full URL: extract hostname for lookup, use URL as runtime base URL override. Bare hostname or alias: lookup below. |
+| 1 | `--server <value>` flag | Full URL (or scheme-less `host:port`): extract hostname for lookup; use the URL as a runtime base URL override. Bare hostname or alias: lookup below. |
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
@@ -554,17 +562,19 @@ Resolution is a two-step process: resolve the host, then resolve the profile wit
 
 Bare value lookup order: exact match against `hosts` keys first, then alias scan. Multiple alias matches → warn and use first (config file order).
 
+Scheme-less `host:port` inputs (e.g. `nas.local:8096`) are treated like a full URL by first adding a default scheme (e.g. `https://nas.local:8096`) before extracting the hostname.
+
 ### Profile resolution
 
 Given a resolved host:
 
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--profile <name>` flag | Must exist under the resolved host. |
-| 2 | `JF_PROFILE` env var | Must exist under the resolved host. |
+| 1 | `--profile <name>` flag | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
+| 2 | `JF_PROFILE` env var | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 3 | `defaultProfile` for the host | Used as-is. |
 | 4 | Single profile | If the host has exactly one profile, use it implicitly. |
-| 5 | *(none)* | Error: `No profile specified for host "<hostname>". Use --profile or set a default.` |
+| 5 | *(none)* | Error: `No profile specified for host "<hostname>". Use --profile or set a default with: jf auth profiles use <name>` |
 
 ### Config file
 
@@ -596,7 +606,7 @@ Override with `--config <path>` or `JF_CONFIG` env var.
         },
         "admin": {
           "user": "admin",
-          "baseUrl": "https://jf.home.example.com/admin",
+          "baseUrl": "https://jf.home.example.com/jellyfin",
           "authKind": "apiKey"
         }
       }
@@ -624,7 +634,7 @@ Hosts are keyed by network hostname (lowercased). Profiles are nested under thei
 
 | Variable | Maps to flag | Description |
 |---|---|---|
-| `JF_SERVER` | `--server` | Jellyfin server (hostname, alias, or full URL) |
+| `JF_SERVER` | `--server` | Jellyfin server (hostname, alias, scheme-less `host:port`, or full URL) |
 | `JF_TOKEN` | (auth override) | Access token override, bypasses the secret store |
 | `JF_PROFILE` | `--profile` | Profile name override for the resolved host |
 | `JF_CONFIG` | `--config` | Override config file path |
@@ -635,7 +645,7 @@ Hosts are keyed by network hostname (lowercased). Profiles are nested under thei
 
 `JF_TOKEN` is specifically for CI/automation pipelines where storing a profile is undesirable.
 When set, it takes precedence over any stored credential for the resolved host.
-If `JF_TOKEN` is set and `JF_SERVER` is a full URL, the CLI may allow a config-less ephemeral context for that invocation (no config writes, no secret-store access).
+If `JF_TOKEN` is set and the **selected server input** is a full URL (`--server` or `JF_SERVER`), the CLI may allow a config-less ephemeral context for that invocation when no configured host/alias matches the hostname (no config writes, no secret-store access).
 
 ---
 
@@ -679,6 +689,7 @@ Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--
 - No ANSI codes, no progress bars, no banners mixed in.
 - `jf raw ... --json` still returns the envelope; `data` contains the parsed JSON response from the server for that call.
 - In `--json` mode, avoid stderr noise; surface diagnostic paths and structured errors in the envelope `meta`/`error`. Use stderr only when the envelope cannot be emitted.
+- Warnings in `--json` mode are represented as structured items in `meta.warnings` (no ad hoc stderr noise).
 - Errors are still JSON when `--json` is set:
 
 ```json

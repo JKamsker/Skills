@@ -8,11 +8,16 @@ use url::Url;
 // - Network operations use a normalized base URL (scheme/port/path may matter).
 // - Credentials and defaults bind to the hostname identity key (lowercased hostname).
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
-    #[default]
     Table,
     Json,
+}
+
+impl Default for OutputFormat {
+    fn default() -> Self {
+        Self::Table
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -224,7 +229,11 @@ fn select_profile_for_target(target_key: &str, config: &Config) -> Result<Option
         .iter()
         .filter_map(|(key, profile)| {
             let normalized_key = normalize_hostname(key).ok()?;
-            (normalized_key == target_key).then_some(profile)
+            if normalized_key == target_key {
+                Some(profile)
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 
@@ -259,7 +268,11 @@ fn select_profile_for_target(target_key: &str, config: &Config) -> Result<Option
                 None
             }?;
 
-            (key == target_key).then_some(name.clone())
+            if key == target_key {
+                Some(name.clone())
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 
@@ -276,6 +289,8 @@ pub fn normalize_base_url_input(raw: &str) -> Result<String, CliError> {
     let trimmed = raw.trim();
     let normalized = if trimmed.contains("://") {
         trimmed.to_string()
+    } else if trimmed.contains(':') && trimmed.parse::<std::net::Ipv6Addr>().is_ok() {
+        format!("https://[{trimmed}]")
     } else {
         format!("https://{trimmed}")
     };
@@ -311,7 +326,30 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
         return Err(CliError::usage("hostname is required".to_string()));
     }
 
-    let looks_like_url = trimmed.contains("://") || trimmed.contains('/') || trimmed.contains(':');
+    if !trimmed.contains("://")
+        && !trimmed.contains('/')
+        && !trimmed.contains('?')
+        && !trimmed.contains('#')
+        && trimmed.contains(':')
+        && trimmed.parse::<std::net::Ipv6Addr>().is_ok()
+    {
+        // Allow bare IPv6 hostnames without brackets (identity keys are host-only).
+        return Ok(trimmed.to_ascii_lowercase());
+    }
+
+    let looks_like_windows_path = trimmed.starts_with(r"\\")
+        || (trimmed.len() >= 3
+            && trimmed.as_bytes()[1] == b':'
+            && (trimmed.as_bytes()[2] == b'\\' || trimmed.as_bytes()[2] == b'/'));
+    if looks_like_windows_path {
+        return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+    }
+
+    let looks_like_url = trimmed.contains("://")
+        || trimmed.contains('/')
+        || trimmed.contains(':')
+        || trimmed.contains('?')
+        || trimmed.contains('#');
     if looks_like_url {
         let candidate = if trimmed.contains("://") {
             trimmed.to_string()
@@ -319,8 +357,56 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
             format!("https://{trimmed}")
         };
 
-        if let Ok(url) = Url::parse(&candidate) {
-            if let Some(host) = url.host_str() {
+        match Url::parse(&candidate) {
+            Ok(url) => {
+                let host = url.host_str().ok_or_else(|| {
+                    CliError::usage(format!("invalid hostname: missing hostname in '{raw}'"))
+                })?;
+                return Ok(host.trim_matches(&['[', ']'][..]).to_ascii_lowercase());
+            }
+            Err(_) => {
+                if trimmed.contains("://") {
+                    return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                }
+
+                if trimmed.contains(':') && !trimmed.contains('/') && !trimmed.contains('@') {
+                    // Looks like a host:port input, but did not parse as a URL (likely invalid port).
+                    return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                }
+
+                let without_scheme = trimmed.splitn(2, "://").nth(1).unwrap_or(trimmed);
+                let without_userinfo = without_scheme.rsplit_once('@').map(|(_, rest)| rest).unwrap_or(without_scheme);
+                let authority = without_userinfo
+                    .split(|c| c == '/' || c == '?' || c == '#')
+                    .next()
+                    .unwrap_or(without_userinfo)
+                    .trim();
+
+                let host = if authority.starts_with('[') {
+                    let end = authority
+                        .find(']')
+                        .ok_or_else(|| CliError::usage(format!("invalid hostname: '{raw}'")))?;
+                    authority[1..end].trim()
+                } else {
+                    // If the input looks like scheme-less host:port[/...] but URL parsing failed above,
+                    // reject it to avoid silently collapsing to just the host.
+                    let looks_like_host_port = match authority.split_once(':') {
+                        Some((_, rest)) => {
+                            let port = rest.split_once('/').map(|(p, _)| p).unwrap_or(rest);
+                            !port.is_empty()
+                        }
+                        None => false,
+                    };
+                    if looks_like_host_port {
+                        return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                    }
+                    authority.split_once(':').map(|(h, _)| h.trim()).unwrap_or(authority)
+                };
+
+                if host.is_empty() {
+                    return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                }
+
                 return Ok(host.to_ascii_lowercase());
             }
         }
@@ -339,7 +425,8 @@ pub fn target_identity_hostname_key(normalized_base_url: &str) -> Result<String,
 
 fn first_non_empty<const N: usize>(candidates: [Option<String>; N]) -> Option<String> {
     candidates
-        .into_iter()
-        .flatten()
+        .iter()
+        .filter_map(|value| value.as_ref())
         .find(|value| !value.trim().is_empty())
+        .cloned()
 }

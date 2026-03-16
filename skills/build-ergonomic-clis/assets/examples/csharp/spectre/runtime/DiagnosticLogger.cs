@@ -1,4 +1,8 @@
+using System.Net.Http;
 using System.Net.Http.Headers;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -7,10 +11,10 @@ namespace ExampleCli.Runtime;
 public sealed class DiagnosticLogger
 {
     private static readonly Regex JwtPattern = new(@"\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b", RegexOptions.Compiled);
-    private static readonly Regex SecretParamPattern = new(@"\b(?<key>token|access_token|api_key|apikey|password|secret)=(?<value>[^&\s]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex SecretParamPattern = new(@"\b(?<key>token|access_token|refresh_token|id_token|api_key|apikey|client_secret|password|secret)=(?<value>[^&\s]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public string? TryWrite(
-        ResolvedContext context,
+        ResolvedContextSafe context,
         string operation,
         Exception exception,
         HttpRequestMessage? request = null,
@@ -32,7 +36,7 @@ public sealed class DiagnosticLogger
             var builder = new StringBuilder();
             builder.AppendLine($"Timestamp: {DateTimeOffset.UtcNow:O}");
             builder.AppendLine($"Operation: {operation}");
-            builder.AppendLine($"BaseUrl: {context.BaseUrl}");
+            builder.AppendLine($"BaseUrl: {RedactPotentialSecrets(context.BaseUrl)}");
             builder.AppendLine($"TargetIdentityKey: {context.TargetIdentityKey}");
             builder.AppendLine($"Profile: {context.Profile}");
             builder.AppendLine($"AuthSource: {context.AuthSource}");
@@ -42,7 +46,7 @@ public sealed class DiagnosticLogger
             if (request is not null)
             {
                 builder.AppendLine();
-                builder.AppendLine($"Request: {request.Method} {SanitizeUri(request.RequestUri) ?? "(unknown)"}");
+                builder.AppendLine($"Request: {request.Method} {RedactPotentialSecrets(SanitizeUri(request.RequestUri) ?? "(unknown)")}");
                 builder.AppendLine(RedactHeaders(request.Headers));
                 if (request.Content is not null)
                     builder.AppendLine(RedactHeaders(request.Content.Headers));
@@ -56,6 +60,36 @@ public sealed class DiagnosticLogger
                 if (response.Content is not null)
                     builder.AppendLine(RedactHeaders(response.Content.Headers));
             }
+
+            File.WriteAllText(path, builder.ToString());
+            return path;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public string? TryWrite(string operation, Exception exception)
+    {
+        try
+        {
+            var root = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "example-cli",
+                "logs");
+
+            Directory.CreateDirectory(root);
+
+            var path = Path.Combine(
+                root,
+                $"example-cli-error-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid():N}.log");
+
+            var builder = new StringBuilder();
+            builder.AppendLine($"Timestamp: {DateTimeOffset.UtcNow:O}");
+            builder.AppendLine($"Operation: {operation}");
+            builder.AppendLine($"Exception: {exception.GetType().FullName}");
+            builder.AppendLine($"Message: {RedactPotentialSecrets(exception.Message)}");
 
             File.WriteAllText(path, builder.ToString());
             return path;
@@ -82,7 +116,8 @@ public sealed class DiagnosticLogger
                 || header.Key.Equals("X-Access-Token", StringComparison.OrdinalIgnoreCase)
                 || header.Key.Equals("X-Amz-Security-Token", StringComparison.OrdinalIgnoreCase);
 
-            var value = isSensitive ? "REDACTED" : string.Join(", ", header.Value);
+            var rawValue = string.Join(", ", header.Value);
+            var value = isSensitive ? "REDACTED" : RedactPotentialSecrets(rawValue);
 
             lines.Add($"{header.Key}: {value}");
         }
@@ -97,7 +132,12 @@ public sealed class DiagnosticLogger
 
         value = JwtPattern.Replace(value, "REDACTED_JWT");
         value = SecretParamPattern.Replace(value, match => $"{match.Groups["key"].Value}=REDACTED");
-        value = Regex.Replace(value, @"\bBearer\s+[A-Za-z0-9._~-]+\b", "Bearer REDACTED", RegexOptions.IgnoreCase);
+        value = Regex.Replace(value, @"\bBearer\s+[A-Za-z0-9._~+\-/=]+\b", "Bearer REDACTED", RegexOptions.IgnoreCase);
+        value = Regex.Replace(
+            value,
+            "\"(?<key>token|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|apiKey|api_key|apikey|clientSecret|client_secret|password|secret)\"\\s*:\\s*\"(?<value>[^\"]+)\"",
+            match => $"\"{match.Groups["key"].Value}\":\"REDACTED\"",
+            RegexOptions.IgnoreCase);
         return value;
     }
 

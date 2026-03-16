@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace ExampleCli.Runtime;
@@ -24,6 +26,24 @@ public sealed record ResolvedContext(
     string? Token,
     AuthSource AuthSource,
     OutputMode OutputMode);
+
+public sealed record ResolvedContextSafe(
+    string BaseUrl,
+    string TargetIdentityKey,
+    string Profile,
+    AuthSource AuthSource,
+    OutputMode OutputMode);
+
+public static class ResolvedContextExtensions
+{
+    public static ResolvedContextSafe ToSafe(this ResolvedContext context)
+        => new(
+            BaseUrl: context.BaseUrl,
+            TargetIdentityKey: context.TargetIdentityKey,
+            Profile: context.Profile,
+            AuthSource: context.AuthSource,
+            OutputMode: context.OutputMode);
+}
 
 public interface IProfileStore
 {

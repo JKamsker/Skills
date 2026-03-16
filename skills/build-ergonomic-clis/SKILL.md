@@ -1,7 +1,7 @@
 ---
 name: build-ergonomic-clis
 description: Designs, reviews, and implements product-grade command-line interfaces. Covers command tree structure, flag conventions, auth and profile UX, config precedence, machine-readable output, confirmation and dry-run rules, exit codes, and non-interactive behavior. Use when designing a CLI, reviewing CLI UX/DX, planning command structure, adding argument parsing, or implementing a service CLI. Supports C#/.NET Spectre.Console.Cli and Rust clap.
-argument-hint: "[design|review|implement] <description>"
+argument-hint: "[design|review|implementation] <description>"
 ---
 
 # Build Ergonomic CLIs
@@ -25,10 +25,10 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
   - **Multi-surface service**: multiple independent target/auth surfaces (contexts, daemons + registries, certs + accounts, etc.).
 - Always start with [references/cli-patterns.md](references/cli-patterns.md) (generic CLI + automation contract).
 - Then load service guidance based on the classification:
-  - **Local-only**: `cli-patterns.md` only.
-  - **Hybrid**: `cli-patterns.md` + only the relevant sections of [references/service-cli-patterns.md](references/service-cli-patterns.md) for the remote-facing branches.
+  - **Local-only**: [references/cli-patterns.md](references/cli-patterns.md) only.
+  - **Hybrid**: [references/cli-patterns.md](references/cli-patterns.md) + only the relevant sections of [references/service-cli-patterns.md](references/service-cli-patterns.md) for the remote-facing command subtree (typically: **Auth Design**, **Targets, Profiles/Contexts, Defaults**, **Target Identity Modes**, **Resolution Algorithm**, **Aliases, Inference, Validation, Migration**, and protocol-specific **Protocol-Level Error Handling**/**Protocol-Level Diagnostic Logging**).
   - **Service-native**: read [references/service-cli-patterns.md](references/service-cli-patterns.md) fully.
-  - **Multi-surface service**: read [references/service-cli-patterns.md](references/service-cli-patterns.md) fully and explicitly apply the multiple-auth/context guidance.
+  - **Multi-surface service**: read [references/service-cli-patterns.md](references/service-cli-patterns.md) fully and explicitly apply [Multiple Auth Surfaces](references/service-cli-patterns.md#multiple-auth-surfaces) and [Context / Profile / Account Vocabulary](references/service-cli-patterns.md#context--profile--account-vocabulary).
 - Define the command tree, help contract, env/config precedence, target/auth/context resolution, automation contract, confirmation rules, machine output, and non-interactive behavior before talking about code structure.
 - Generic references are the source of truth. Worked examples are illustrative; if an example conflicts with a reference, the reference wins.
 - Use [assets/design/jf-cli-design.md](assets/design/jf-cli-design.md) only as a worked benchmark after the first design pass.

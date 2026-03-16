@@ -72,7 +72,7 @@ Reserve consistent flags and branches for consistent jobs.
 - `-V`, `--version` or `-v` only if your framework already owns it consistently
 - `--dry-run`: preview a mutating operation without side effects; prefer this as the primary safety flag
 - `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect
-- `--json` or `--output json`: stable machine output
+- `--json` or `--output json`: stable machine output (selects the default stable version, currently v1)
 - `--verbose` or `-v`: increase output detail; repeat for more (`-vv`, `-vvv`) if the tool has multiple verbosity tiers
 - `--no-color`: disable ANSI formatting; also respect the `NO_COLOR` environment variable (see https://no-color.org/)
 - `--quiet`: suppress human-oriented banners, status chatter, and prompts
@@ -168,6 +168,8 @@ If the machine output is a **direct-value contract** (arrays/scalars/JSONL), ver
 
 If the CLI also provides a convenience flag like `--json`, define it precisely (e.g. "`--json` selects the default stable machine contract version, currently v1") so scripts can rely on it.
 
+If the user also passes an explicit version selector (`--porcelain=v1`, `--format-version 1`, `--output json-v1`), the explicit selector wins.
+
 Human output can evolve more freely. Machine output must have an explicit stability boundary.
 
 ### Failure representation
@@ -215,9 +217,13 @@ Treat human and machine output as separate contracts.
 - Keep machine output on stdout.
 - Prompt on stderr, not stdout.
 - In human modes, send warnings and banners to stderr.
-- In machine modes, avoid ad hoc stderr noise (banners/progress/warnings); prefer structured warnings/diagnostic paths inside the machine contract metadata. (Errors are still allowed on stderr for direct-value contracts.)
+- In machine modes:
+  - For envelope-style contracts, avoid ad hoc stderr noise (banners/progress/warnings); prefer structured warnings/diagnostic paths inside machine metadata.
+  - For direct-value/pipeline contracts, stderr remains the channel for warnings and errors; keep stdout value-only.
 - Redact secrets in human output and config dumps.
 - Use explicit exit codes for common failure classes.
+
+Machine mode is determined by the **resolved output mode** (including env/config overrides), not just by whether a user typed `--json`.
 
 ### Base exit codes (all CLI classes)
 
@@ -267,7 +273,8 @@ Define `--quiet` precisely:
 - Never suppresses machine stdout.
 - Never turns a failure into a success. If the command would prompt, it must refuse (exit `2`) unless the user passed `--yes` or `--dry-run`.
 - Does not suppress primary command output (tables/value output) unless the command explicitly documents that it is safe to do so.
-- Suppresses warnings unless they affect correctness (for example: partial results, ambiguous target selection, or a fallback that changes which resource is acted on).
+- In human output modes, suppresses warnings unless they affect correctness (for example: partial results, ambiguous target selection, or a fallback that changes which resource is acted on).
+- In machine output modes, do not change the machine contract payload; warnings remain represented where the contract expects them (for example: `meta.warnings` in an envelope contract).
 - Suppresses "diagnostic log saved to ..." hints; the log file may still be written.
 - May still write diagnostic artifacts according to policy.
 
@@ -370,7 +377,7 @@ The bundled reference repos converge on a small set of patterns worth teaching d
 - Build one visible command tree in one place, and group by user task rather than transport or backend tags.
   - [../assets/examples/csharp/spectre/command-tree/Program.cs](../assets/examples/csharp/spectre/command-tree/Program.cs) shows the same "auth / projects / server" branch style without repo-specific surface area.
 - Treat machine mode as a first-class contract instead of a formatter toggle.
-  - The right shape is stable JSON, structured warnings in machine metadata (and prompts on stderr), `--dry-run`, `--yes`, `--quiet`, and TTY-aware table headers. See [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs).
+  - The right shape is stable JSON, structured warnings in machine metadata, prompts (human mode) on stderr, `--dry-run`, `--yes`, `--quiet`, and TTY-aware table headers. See [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs).
 - Pair user-facing recovery instructions with saved diagnostics.
   - The distilled runtime pieces are [../assets/examples/csharp/spectre/runtime/ApiCommand.cs](../assets/examples/csharp/spectre/runtime/ApiCommand.cs) and [../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs](../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs).
 

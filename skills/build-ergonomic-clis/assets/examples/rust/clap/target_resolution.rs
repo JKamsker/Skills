@@ -4,7 +4,7 @@ use url::Url;
 //
 // Design choices in this sketch:
 // - Network operations use a normalized base URL (scheme + host + non-default port), dropping path/query/fragment.
-// - Remote inference only yields a hostname (and optionally a port); scheme comes from explicit inputs or defaults.
+// - Remote inference yields a host hint; for http(s) remotes it preserves scheme + port, otherwise it yields hostname only.
 // - Identity comparisons for selecting a git remote use a hostname-key (lowercased hostname), not an origin-key.
 
 #[derive(Debug, Clone)]
@@ -60,10 +60,28 @@ pub fn resolve_target(
 
     if resolved_base_url.is_none() || resolved_repo.is_none() {
         if let Some(remote) = select_remote(remotes, args.remote.as_deref(), args.host.as_deref())? {
-            if let Some((host, repo)) = remote_url_to_host_and_repo(&remote.url)? {
-                resolved_base_url.get_or_insert(normalize_base_url(&host)?);
-                if let Some(repo) = repo {
-                    resolved_repo.get_or_insert(repo);
+            let needs_inference = resolved_base_url.is_none() || resolved_repo.is_none();
+            match remote_url_to_host_and_repo(&remote.url) {
+                Ok(Some((host, repo))) => {
+                    resolved_base_url.get_or_insert(normalize_base_url(&host)?);
+                    if let Some(repo) = repo {
+                        resolved_repo.get_or_insert(repo);
+                    }
+                }
+                Ok(None) => {
+                    if args.remote.is_some() && needs_inference {
+                        return Err(CliError(format!(
+                            "remote '{}' does not contain a host; pass --host/--repo explicitly",
+                            remote.name
+                        )));
+                    }
+                }
+                Err(err) => {
+                    if args.remote.is_some() && needs_inference {
+                        return Err(CliError(format!(
+                            "{err}. Pass --host/--repo explicitly or choose a different remote."
+                        )));
+                    }
                 }
             }
         }
@@ -86,19 +104,33 @@ pub fn resolve_target(
 }
 
 pub fn parse_repo_arg(raw: &str) -> Result<RepoArg, CliError> {
-    let (head, name) = raw
-        .rsplit_once('/')
-        .ok_or_else(|| CliError("repo must be [HOST/]OWNER/NAME".to_string()))?;
-    let name = name.strip_suffix(".git").unwrap_or(name);
-    let (host, owner) = match head.rsplit_once('/') {
-        Some((host, owner)) => (Some(host.to_string()), owner.to_string()),
-        None => (None, head.to_string()),
+    let raw = raw.trim();
+    let segments = raw.split('/').filter(|s| !s.is_empty()).collect::<Vec<_>>();
+    if segments.len() < 2 {
+        return Err(CliError("repo must be [HOST/]OWNER[/...]/NAME".to_string()));
+    }
+
+    let last = segments[segments.len() - 1];
+    let name = last.strip_suffix(".git").unwrap_or(last).to_string();
+
+    let first = segments[0];
+    let looks_like_host = first.contains('.')
+        || first.contains(':')
+        || first.eq_ignore_ascii_case("localhost")
+        || first.parse::<std::net::IpAddr>().is_ok();
+
+    let (host, owner_segments) = if segments.len() >= 3 && looks_like_host {
+        (Some(first.to_string()), &segments[1..segments.len() - 1])
+    } else {
+        (None, &segments[..segments.len() - 1])
     };
+
+    let owner = owner_segments.join("/");
 
     Ok(RepoArg {
         host,
         owner,
-        name: name.to_string(),
+        name,
     })
 }
 
@@ -148,7 +180,11 @@ fn select_remote<'a>(
     host_hint: Option<&str>,
 ) -> Result<Option<&'a GitRemote>, CliError> {
     if let Some(name) = preferred {
-        return Ok(remotes.iter().find(|remote| remote.name == name));
+        return remotes
+            .iter()
+            .find(|remote| remote.name == name)
+            .map(Some)
+            .ok_or_else(|| CliError(format!("unknown remote '{name}'")));
     }
 
     if remotes.len() == 1 {
@@ -180,18 +216,53 @@ fn select_remote<'a>(
 }
 
 fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, Option<String>)>, CliError> {
+    let trimmed = raw.trim();
+    let looks_like_windows_path = trimmed.starts_with(r"\\")
+        || (trimmed.len() >= 3
+            && trimmed.as_bytes()[1] == b':'
+            && (trimmed.as_bytes()[2] == b'\\' || trimmed.as_bytes()[2] == b'/'));
+    let looks_like_drive_relative = trimmed.len() >= 2
+        && trimmed.as_bytes()[1] == b':'
+        && !trimmed.contains("://")
+        && !trimmed.contains('/')
+        && !trimmed.contains('\\');
+    let looks_like_windows_relative = trimmed.starts_with(".\\")
+        || trimmed.starts_with("..\\")
+        || trimmed.starts_with("~\\")
+        || trimmed.starts_with(".//")
+        || trimmed.starts_with("..//")
+        || trimmed.starts_with("~/");
+    let looks_like_unix_path = trimmed.starts_with('/')
+        || trimmed.starts_with("./")
+        || trimmed.starts_with("../")
+        || trimmed.starts_with("~/");
+    let looks_like_file_url = trimmed.starts_with("file://");
+    if looks_like_windows_path
+        || looks_like_drive_relative
+        || looks_like_windows_relative
+        || looks_like_unix_path
+        || looks_like_file_url
+        || trimmed.starts_with("gitdir:")
+    {
+        return Ok(None);
+    }
+
     let url = parse_remote_url(raw)?;
     let host = url
         .host_str()
         .ok_or_else(|| CliError("remote url missing host".to_string()))?;
 
-    // Only propagate ports for http(s) remotes. For ssh/scp-style remotes, the port is not
-    // meaningful for an https base URL and would create mismatched targets.
-    let port = match url.scheme() {
-        "http" | "https" => url.port().map(|port| format!(":{port}")).unwrap_or_default(),
-        _ => String::new(),
+    let host_hint = match url.scheme() {
+        "http" | "https" => {
+            let scheme = url.scheme().to_ascii_lowercase();
+            let port = url.port().map(|port| format!(":{port}")).unwrap_or_default();
+            format!("{scheme}://{host}{port}")
+        }
+        _ => host.to_string(),
     };
-    let host_with_port = format!("{host}{port}");
+
+    let looks_like_sshy_path = !trimmed.contains("://")
+        && (trimmed.contains(":/") || trimmed.contains(":~/") || trimmed.contains(":~\\"));
 
     let mut segments = url
         .path_segments()
@@ -203,21 +274,37 @@ fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, Option<Strin
         0 => None,
         1 => None,
         _ => {
-            let name = segments.pop().unwrap().trim_end_matches(".git");
+            let name = segments.pop().unwrap();
+            let name = name.strip_suffix(".git").unwrap_or(name);
             let owner = segments.join("/");
-            Some(format!("{owner}/{name}"))
+            if url.scheme() == "ssh" && (looks_like_sshy_path || owner.starts_with('~') || owner.starts_with('/')) {
+                None
+            } else {
+                Some(format!("{owner}/{name}"))
+            }
         }
     };
 
-    Ok(Some((host_with_port, repo)))
+    Ok(Some((host_hint, repo)))
 }
 
 fn parse_remote_url(raw: &str) -> Result<Url, CliError> {
     if let Ok(url) = Url::parse(raw) {
-        return Ok(url);
+        if url.host_str().is_some() {
+            return Ok(url);
+        }
     }
 
     if raw.contains("://") {
+        return Err(CliError(format!("unable to parse remote url '{raw}'")));
+    }
+
+    let trimmed = raw.trim();
+    let looks_like_windows_path = trimmed.starts_with(r"\\")
+        || (trimmed.len() >= 3
+            && trimmed.as_bytes()[1] == b':'
+            && (trimmed.as_bytes()[2] == b'\\' || trimmed.as_bytes()[2] == b'/'));
+    if looks_like_windows_path {
         return Err(CliError(format!("unable to parse remote url '{raw}'")));
     }
 
@@ -252,9 +339,22 @@ fn split_scp_host_and_path(raw: &str) -> Result<(&str, &str), CliError> {
         }
         end + 1
     } else {
-        trimmed
+        let first = trimmed
             .find(':')
-            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?
+            .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?;
+
+        let after = trimmed[first + 1..].trim_start();
+        let looks_like_windows_drive_path = after.len() >= 3
+            && after.as_bytes()[1] == b':'
+            && (after.as_bytes()[2] == b'\\' || after.as_bytes()[2] == b'/');
+
+        if looks_like_windows_drive_path {
+            first
+        } else {
+            trimmed
+                .rfind(':')
+                .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}'")))?
+        }
     };
 
     let host = trimmed[..sep_index].trim();

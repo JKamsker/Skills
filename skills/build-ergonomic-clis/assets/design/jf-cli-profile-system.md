@@ -24,7 +24,7 @@
 
 ## 1. Overview
 
-> **Related documents:** For the broader CLI design (command tree, output modes, exit codes), see [`jf-cli-design.md`](jf-cli-design.md). For generic self-hosted service patterns (hostname normalization, single-entry inference, migration), see [`../../references/service-cli-patterns.md`](../../references/service-cli-patterns.md).
+> **Related documents:** For the broader CLI design (command tree, output modes, exit codes), see [`jf-cli-design.md`](jf-cli-design.md). For generic self-hosted service patterns (target identity modes, inference, migration, diagnostics), see [`../../references/service-cli-patterns.md`](../../references/service-cli-patterns.md).
  
 The profile system allows the CLI to manage credentials for multiple Jellyfin servers and multiple accounts per server. Profiles are organized by hostname, with a two-level resolution chain: first resolve the host, then resolve the profile within that host.
  
@@ -194,6 +194,8 @@ Evaluated in order, first match wins:
 2. Alias match: scan all hosts for one whose `aliases` array contains the value.
    - If exactly one host matches: use it.
    - If multiple hosts match: use the first match (config file order) and emit a warning:
+     - Human mode: warning is printed to stderr.
+     - `--json` mode: warning is included in `meta.warnings` in the JSON envelope (no stderr noise).
      ```
      Warning: alias "home" is defined on multiple hosts: jf.home.example.com, backup.example.com
      Using jf.home.example.com. To suppress, make aliases unique or use the full hostname.
@@ -206,8 +208,8 @@ Given a resolved host, evaluated in order:
  
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--profile <name>` flag | Must exist under the resolved host. Error if not found. |
-| 2 | `JF_PROFILE` env var | Must exist under the resolved host. Error if not found. |
+| 1 | `--profile <name>` flag | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
+| 2 | `JF_PROFILE` env var | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 3 | `defaultProfile` for the resolved host | Used as-is. |
 | 4 | Single profile | If the resolved host has exactly one profile, use it implicitly. |
 | 5 | *(none)* | Error: `No profile specified for host "<hostname>". Use --profile or set a default with: jf auth profiles use <name>` |
@@ -218,7 +220,7 @@ Given a resolved host and profile:
  
 | Priority | Source | Description |
 |----------|--------|-------------|
-| 1 | `--server` full URL | Used for this invocation only. Not persisted. |
+| 1 | `--server` full URL / `JF_SERVER` full URL | Used for this invocation only. Not persisted (except `jf auth login`, which writes/updates config). |
 | 2 | Profile-level `baseUrl` | Override for this specific profile. |
 | 3 | Host-level `baseUrl` | Default for all profiles under this host. |
  
@@ -256,9 +258,11 @@ When `--server` or `JF_SERVER` provides a full URL, the hostname is extracted fo
 | `http://192.168.1.50:8096` | `192.168.1.50` |
 | `nas.local` (bare) | `nas.local` |
  
-Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent). If parsing fails (no scheme), treat the input as a bare hostname.
- 
+Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent). If parsing fails because the input has no scheme, treat the input as a bare hostname (and if it looks like `host:port`, first add a default scheme before parsing).
+
 Port and path are **not** part of the hostname key. They are preserved only in `baseUrl`.
+
+**Note:** Scheme-less `host:port` inputs (e.g. `nas.local:8096`) are treated as a full URL by first adding a default scheme (e.g. `https://nas.local:8096`) before extracting the hostname. This keeps the hostname key host-only while still allowing ports in the runtime base URL.
 
 ### Exact normalization rules (hostname-key identity)
 
@@ -306,7 +310,7 @@ resolve(serverArg, profileArg):
   credentialKind = profile.authKind
   secret =
     if env.JF_TOKEN is set then env.JF_TOKEN
-    else secretStore.get("jf:cred:{hostnameKey}:{profileName}:{credentialKind}") ?? missingAuthError()
+    else secretStore.get("jf:cred:{hostnameKey}:{profile}:{credentialKind}") ?? missingAuthError()
 
   return (hostnameKey, profileName, effectiveBaseUrl, secret)
 ```
@@ -316,7 +320,9 @@ resolve(serverArg, profileArg):
 ## 5. CLI Commands
  
 ### 5.1 Authentication
- 
+
+This section documents only the auth commands that create/use profiles and stored credentials (`login`/`logout`). For other auth commands (e.g. `status`, `whoami`, `set-token`, `test`, `api-keys`), see [`jf-cli-design.md`](jf-cli-design.md).
+
 #### `jf auth login`
 
 Interactive login to a Jellyfin server. Creates or updates a host entry and profile.
@@ -327,20 +333,20 @@ jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-
  
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--server` | Yes (for first login) | Full server URL. Hostname extracted as config key, URL stored as `baseUrl`. |
+| `--server` | Yes (for first login) | Server URL (or scheme-less `host:port`). Hostname extracted as config key; URL stored as `baseUrl`. |
 | `--profile` | No | Profile name. Default: prompts interactively, or `"default"` in non-interactive mode. |
-| `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. |
-| `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login. |
+| `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. Required in `--json` mode (no prompts). |
+| `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login (no prompts). |
 | `--quick-connect` | No | Use the Quick Connect device-flow-style login (interactive). Refuses in machine output modes. |
   
 **Flow:**
   
-1. Extract hostname from `--server` URL.
+1. Resolve the server input (from `--server` or `JF_SERVER`) and extract hostname for the host key.
 2. Perform the selected auth flow (password-based or quick-connect) and obtain an access token (see `jf-cli-design.md` for the detailed interaction contract).
 3. Create or update `hosts[hostname]`:
    - Set `baseUrl` on the host if this is a new host entry.
     - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
-    - Store the credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{authKind}`.
+    - Store the credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (where `credentialKind` is `profile.authKind`).
     - If this is the only host, set as `defaultHost`.
     - If this is the only profile on the host, set as `defaultProfile`.
 4. Write config.
@@ -349,7 +355,7 @@ jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-
  
 #### `jf auth logout`
   
-Discard the stored credential for a profile.
+Best-effort revoke and remove the stored credential for a profile.
   
 ```
 jf auth logout [--server <host>] [--profile <name>]
@@ -409,6 +415,12 @@ Profile:  admin
 Base URL: https://nas.local:8096/jellyfin
 Username: admin
 Auth:     token (stored in secret store)
+```
+
+If `JF_TOKEN` is set, show it as an override source (do not print the token itself):
+
+```text
+Auth:     token (from JF_TOKEN override)
 ```
  
 #### `jf auth profiles use <name>`
@@ -514,7 +526,23 @@ The alias is still added — duplicates are allowed but discouraged.
 Routing:
 
 - Human mode: warning is printed to stderr.
-- `--json` mode: warning is included in the JSON envelope metadata (no stderr noise).
+- `--json` mode: warning is included in `meta.warnings` in the JSON envelope (no stderr noise).
+
+Example (`--json`):
+
+```json
+{
+  "ok": true,
+  "data": { "aliasAdded": true },
+  "error": null,
+  "meta": {
+    "schemaVersion": 1,
+    "warnings": [
+      { "code": "alias_duplicate", "message": "alias \"home\" is also set on jf.home.example.com" }
+    ]
+  }
+}
+```
 
 If `<alias>` matches an existing host key (e.g. adding alias `nas.local` to some other host), an additional warning is emitted:
 
@@ -558,7 +586,7 @@ Warning: alias "home" is also set on jf.home.example.com
 Routing:
 
 - Human mode: warning is printed to stderr.
-- `--json` mode: warning is included in the JSON envelope metadata (no stderr noise).
+- `--json` mode: warning is included in `meta.warnings` in the JSON envelope (no stderr noise).
  
 ---
  
@@ -568,11 +596,11 @@ These flags are available on all commands, not just `auth`:
  
 | Flag | Env Var | Description |
 |------|---------|-------------|
-| `--server <value>` | `JF_SERVER` | Hostname, alias, or full URL to select/override the target server. |
+| `--server <value>` | `JF_SERVER` | Hostname, alias, scheme-less `host:port`, or full URL to select/override the target server. |
 | `--profile <name>` | `JF_PROFILE` | Profile name to use on the resolved host. |
 | `--config <path>` | `JF_CONFIG` | Path to config file (overrides default location). |
-| `--json` | `JF_OUTPUT` | Emit the JSON envelope contract to stdout (non-interactive). |
-| `--quiet` | | Suppress human-facing output and prompts. |
+| `--json` | `JF_OUTPUT` | Output the versioned JSON envelope contract to stdout (non-interactive). |
+| `--quiet` | | Suppress human-facing output and prompts; if a confirmation prompt would be required, refuse with exit `2` unless `--yes` or `--dry-run` is provided. |
 | `--dry-run` | | Preview a mutating operation without mutating. |
 | `--yes` | | Skip confirmation prompts for destructive actions. |
 | `--no-color` | `NO_COLOR` | Disable ANSI formatting. |
@@ -593,9 +621,9 @@ If `config.json` does not exist but a legacy `credentials.json` is found in the 
 3. Parse the hostname from the server URL.
 4. Create `config.json` with a single host and a single profile named `"default"`.
 5. Set that host as `defaultHost` and `"default"` as `defaultProfile`.
-6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostnameKey}:default:{authKind}`.
+6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostnameKey}:default:{credentialKind}`.
 7. Rename `credentials.json` to `credentials.json.bak`.
-8. In human mode, print a one-line note to stderr: `Migrated credentials to new profile format. Backup: credentials.json.bak`
+8. In human mode, print a one-line note to stderr: `Migrated credentials to new profile format. Backup: credentials.json.bak` (in `--json`, include as a `meta.warnings` item or suppress).
  
 No data is lost. The backup file is never read by the CLI again.
  
@@ -640,7 +668,7 @@ Hostnames are lowercased before use as config keys. `NAS.local` and `nas.local` 
  
 ### Token expiry
  
-Token expiry detection is outside the scope of this spec. The CLI should handle HTTP 401 responses gracefully and prompt re-authentication, but the profile system itself does not track expiry.
+Token expiry detection is outside the scope of this spec. The CLI should handle HTTP 401 responses gracefully and require re-authentication (exit `3` with an actionable recovery command), but it must never start an interactive login flow from non-auth commands and must never prompt in `--json` mode.
  
 ### Alias shadowed by host key
  
@@ -653,11 +681,12 @@ If an alias value is identical to an existing host key, the host key always wins
 Multiple hosts may share an alias. When a lookup matches more than one host:
  
 - The first matching host in config file order is used.
-- A warning is printed to stderr:
+- A warning is printed to stderr (human mode):
   ```
   Warning: alias "home" is defined on multiple hosts: jf.home.example.com, backup.example.com
   Using jf.home.example.com. To suppress, make aliases unique or use the full hostname.
   ```
+  In `--json` mode, the warning is included in `meta.warnings` in the JSON envelope (no stderr noise).
  
 This is by design — the user is informed rather than blocked, and the tie-break is deterministic.
  
@@ -671,7 +700,7 @@ The CLI uses atomic file writes (write to temp file, then rename) to prevent cor
  
 | Variable | Description | Equivalent Flag |
 |----------|-------------|-----------------|
-| `JF_SERVER` | Default server hostname, alias, or URL | `--server` |
+| `JF_SERVER` | Default server hostname, alias, scheme-less `host:port`, or URL | `--server` |
 | `JF_PROFILE` | Default profile name | `--profile` |
 | `JF_CONFIG` | Config file path | `--config` |
 | `JF_TOKEN` | Access token override (bypasses secret store) | *(auth override)* |

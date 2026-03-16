@@ -136,6 +136,11 @@ If you support aliases (e.g. `home`, `prod`), define:
 - ambiguity behavior (deterministic tie-break + warning, or hard error — choose one and document it)
 - shadowing behavior (if alias equals a real target key, target key wins; warn when created)
 
+Warning routing:
+
+- Envelope-style machine modes: represent ambiguity warnings in machine metadata (e.g. `meta.warnings`).
+- Direct-value/pipeline modes: represent ambiguity warnings on stderr (keep stdout value-only).
+
 ### Single-entry inference
 
 One target configured? Use it. One profile on a target? Use it. This yields zero-config behavior for the common single-server, single-account case without hidden global state.

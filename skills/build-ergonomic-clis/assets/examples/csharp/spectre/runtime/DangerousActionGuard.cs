@@ -1,3 +1,6 @@
+using System;
+using System.Threading.Tasks;
+
 namespace ExampleCli.Runtime;
 
 public enum GuardDecision
@@ -12,6 +15,7 @@ public enum GuardDecision
 // - exit 10: explicit user cancellation (answered "no")
 public sealed class DangerousActionGuard
 {
+    // This method is async to support an async dry-run preview action.
     public async Task<GuardDecision> AuthorizeAsync(
         GlobalOptions options,
         string prompt,

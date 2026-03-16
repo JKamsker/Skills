@@ -28,7 +28,7 @@ The work should achieve six outcomes.
 
 Resolve disagreements between docs and examples around:
 
-* target identity / canonical host key behavior
+* target identity / identity-key behavior
 * secret storage policy
 * exit-code behavior for confirmation-required failures
 * stdout/stderr routing for machine output
@@ -158,7 +158,7 @@ This classification determines which sections of the references must be applied.
 
 ## 4.2 Target identity is a chosen mode, not a universal rule
 
-The skill should stop pretending there is one correct canonical host key format.
+The skill should stop pretending there is one correct universal host-key format.
 
 Instead, service-like designs must choose one of these **target identity modes**:
 
@@ -649,7 +649,7 @@ If inline secrets remain shown, label them clearly as fallback or simplified exa
 
 ### 6.2 `assets/design/jf-cli-design.md`
 
-#### Align with the canonical machine-contract language
+#### Align with the reference machine-contract language
 
 Update all JSON output examples to match the chosen envelope style and versioning story.
 
@@ -701,11 +701,11 @@ Change the implementation so it no longer treats runtime base URL normalization 
 Introduce separate concepts:
 
 * `NormalizeBaseUrl(...)`
-* `CanonicalTargetIdentity(...)`
+* `DeriveHostnameIdentityKey(...)` (for the hostname-key identity mode)
 
 For the Jellyfin example:
 
-* `CanonicalTargetIdentity(...)` should return lowercase hostname only
+* `DeriveHostnameIdentityKey(...)` should return lowercase hostname only
 * runtime base URL can still preserve scheme/port/path as needed for actual requests
 
 #### `assets/examples/rust/clap/profile_context.rs`

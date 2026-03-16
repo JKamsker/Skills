@@ -82,7 +82,7 @@ Use this contract instead:
   * `LoadAsync(profile)`
   * `DeleteAsync(profile)`
 * OS-backed secure store implementation per platform
-* encrypted file fallback only when no platform store exists, with an explicit warning banner
+* encrypted file fallback only when no platform store exists, with an explicit warning banner (human mode on stderr; never on stdout in machine output)
 
 Also separate:
 
@@ -299,6 +299,7 @@ Based on the uploaded Jellyfin 10.11.6 OpenAPI, I’d make this a task-first CLI
 4. Show IDs prominently in every table, because most follow-up operations key off UUIDs.
 5. Mark privileged commands as `[admin]` directly in help.
 6. Keep `--json` on every command, and keep destructive commands interactive unless `--yes` is passed.
+   - In machine output modes, never prompt; refuse with an actionable error instead.
 7. Hide transport/reporting/debug endpoints unless the user calls `raw` or asks for `--help-all`.
 
 Those rules are mainly driven by the API shape: many list/query endpoints use `startIndex` and `limit`, many mutation endpoints accept comma-delimited `ids` or `entryIds`, most resource actions are UUID-based, and many operations are explicitly guarded by elevation or service-specific permissions.

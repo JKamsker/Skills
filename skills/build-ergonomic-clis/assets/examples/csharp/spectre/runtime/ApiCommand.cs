@@ -1,5 +1,8 @@
 using Spectre.Console.Cli;
+using System;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace ExampleCli.Runtime;
 
@@ -22,16 +25,16 @@ public sealed class CliException : Exception
         => new(10, message);
 }
 
-internal sealed record JsonMeta(
+public sealed record JsonMeta(
     int SchemaVersion,
     string? DiagnosticLogPath = null);
 
-internal sealed record JsonError(
+public sealed record JsonError(
     string Kind,
     string Message,
     string? Recovery = null);
 
-internal sealed record JsonEnvelope(
+public sealed record JsonEnvelope(
     bool Ok,
     object? Data,
     JsonError? Error,
@@ -40,6 +43,8 @@ internal sealed record JsonEnvelope(
 public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
     where TSettings : GlobalOptions
 {
+    // Note: Spectre.Console.Cli has changed the `ExecuteAsync` override signature across versions
+    // (some versions include a `CancellationToken`). Adapt the override signature to your version.
     private readonly TargetResolver _resolver;
     private readonly DiagnosticLogger _diagnosticLogger;
 
@@ -51,10 +56,10 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         _diagnosticLogger = diagnosticLogger;
     }
 
-    public sealed override async Task<int> ExecuteAsync(
-        CommandContext context,
-        TSettings settings)
+    public sealed override async Task<int> ExecuteAsync(CommandContext context, TSettings settings)
     {
+        var outputMode = settings.OutputMode;
+
         ResolvedContext resolved;
         try
         {
@@ -62,8 +67,14 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (CliException ex)
         {
-            RenderCliError(ex, settings.OutputMode);
+            RenderCliError(ex, outputMode);
             return ex.ExitCode;
+        }
+        catch (Exception ex)
+        {
+            var logPath = _diagnosticLogger.TryWrite(context.Name, ex);
+            RenderUnexpectedError(ex, logPath, outputMode);
+            return 1;
         }
 
         try
@@ -77,19 +88,25 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (HttpRequestException ex)
         {
-            var logPath = _diagnosticLogger.TryWrite(resolved, context.Name, ex);
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
             RenderNetworkError(ex, logPath, resolved.OutputMode);
             return 8;
         }
         catch (OperationCanceledException ex)
         {
-            var logPath = _diagnosticLogger.TryWrite(resolved, context.Name, ex);
-            RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);
-            return 8;
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
+            if (!settings.IsUserCancellation)
+            {
+                RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);
+                return 8;
+            }
+
+            RenderCliError(CliException.Cancelled("Cancelled."), resolved.OutputMode);
+            return 10;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var logPath = _diagnosticLogger.TryWrite(resolved, context.Name, ex);
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
             RenderUnexpectedError(ex, logPath, resolved.OutputMode);
             return 1;
         }
@@ -109,15 +126,15 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 Data: null,
                 Error: new JsonError(
                     Kind: KindForExitCode(ex.ExitCode),
-                    Message: RedactPotentialSecrets(ex.Message),
-                    Recovery: ex.RecoveryCommand),
+                    Message: RedactPotentialSecrets(ex.Message) ?? string.Empty,
+                    Recovery: RedactPotentialSecrets(ex.RecoveryCommand)),
                 Meta: new JsonMeta(SchemaVersion: 1)));
             return;
         }
 
         Console.Error.WriteLine($"Error: {RedactPotentialSecrets(ex.Message)}");
         if (!string.IsNullOrWhiteSpace(ex.RecoveryCommand))
-            Console.Error.WriteLine($"Try: {ex.RecoveryCommand}");
+            Console.Error.WriteLine($"Try: {RedactPotentialSecrets(ex.RecoveryCommand)}");
     }
 
     private static void RenderNetworkError(HttpRequestException ex, string? logPath, OutputMode outputMode)
@@ -130,7 +147,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 Error: new JsonError(
                     Kind: "network",
                     Message: "Network error."),
-                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: logPath)));
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPath(logPath))));
             return;
         }
 
@@ -149,7 +166,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 Error: new JsonError(
                     Kind: "unexpected",
                     Message: "Unexpected error."),
-                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: logPath)));
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: SanitizeLogPath(logPath))));
             return;
         }
 
@@ -185,7 +202,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         Console.Out.WriteLine(JsonSerializer.Serialize(envelope, options));
     }
 
-    private static string RedactPotentialSecrets(string value)
+    private static string? RedactPotentialSecrets(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
             return value;
@@ -197,16 +214,29 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
 
         value = System.Text.RegularExpressions.Regex.Replace(
             value,
-            @"\b(?<key>token|access_token|api_key|apikey|password|secret)=(?<value>[^&\s]+)",
+            @"\b(?<key>token|access_token|refresh_token|id_token|api_key|apikey|client_secret|password|secret)=(?<value>[^&\s]+)",
             match => $"{match.Groups["key"].Value}=REDACTED",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
         value = System.Text.RegularExpressions.Regex.Replace(
             value,
-            @"\bBearer\s+[A-Za-z0-9._~-]+\b",
+            @"\bBearer\s+[A-Za-z0-9._~+\-/=]+\b",
             "Bearer REDACTED",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+        value = System.Text.RegularExpressions.Regex.Replace(
+            value,
+            "\"(?<key>token|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|apiKey|api_key|apikey|clientSecret|client_secret|password|secret)\"\\s*:\\s*\"(?<value>[^\"]+)\"",
+            match => $"\"{match.Groups["key"].Value}\":\"REDACTED\"",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
         return value;
+    }
+
+    private static string? SanitizeLogPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+        return System.IO.Path.GetFileName(path);
     }
 }

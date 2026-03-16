@@ -20,7 +20,7 @@ public class GlobalOptions : CommandSettings
     public string? Profile { get; init; }
 
     [CommandOption("--token <TOKEN>")]
-    [Description("Access token override")]
+    [Description("Access token override (prefer env or stdin; argv secrets can leak via shell history/process list)")]
     public string? Token { get; init; }
 
     [CommandOption("--json")]
@@ -42,6 +42,10 @@ public class GlobalOptions : CommandSettings
     [CommandOption("-y|--yes")]
     [Description("Skip confirmation prompts for destructive actions")]
     public bool Yes { get; init; }
+
+    // In a real implementation, SIGINT/CancelKeyPress wiring should set this to true so that
+    // user cancellation maps to exit 10 instead of being treated like a timeout/network error.
+    public bool IsUserCancellation { get; set; }
 
     public OutputMode OutputMode => Json ? OutputMode.Json : OutputMode.Table;
 }

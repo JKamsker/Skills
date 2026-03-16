@@ -4,24 +4,26 @@ Apply this checklist to a designed CLI contract (and to implementations where ap
 
 ## Non-interactive and safety
 
-- [ ] Non-TTY destructive command without `--yes` refuses (exit `2`) and explains how to proceed.
-- [ ] `--quiet` destructive command without override refuses (exit `2`) and explains how to proceed.
+- [ ] Destructive command refuses (exit `2`) when prompting is not allowed (stdin is not a TTY or stderr is not a TTY, or `--quiet`) unless `--yes` or `--dry-run` is present.
 - [ ] `--dry-run` on a mutating command prints a preview and performs no mutations.
 - [ ] Explicit user cancellation (answering “no”, Ctrl+C) returns exit `10` (not exit `2`).
-- [ ] Machine output modes (`--json`, porcelain) never prompt or block for interaction (including on stderr); if interaction would be required, they refuse (exit `2`) with actionable guidance.
+- [ ] Machine output modes (resolved output mode: flags/env/config, e.g. `--json` or `--porcelain=v1`) never prompt, wait for input, or launch browsers; if interaction would be required, they refuse (exit `2`) with actionable guidance.
 
 ## Machine output
 
 - [ ] `--output json` / `--json` success produces valid, versioned machine output on stdout.
+- [ ] “Expected failures” (domain errors like not-found/not-authenticated/conflict) are represented per the contract style; they are not treated like unclassified crashes.
 - [ ] `--output json` / `--json` expected failure produces valid, versioned machine output on stdout (for envelope-style designs).
-- [ ] Banners/prompts/warnings do not appear on stdout in machine modes.
-- [ ] In machine modes, avoid ad hoc stderr chatter; warnings and diagnostic paths are represented in the machine contract metadata when possible.
+- [ ] Banners/prompts/human-formatted warning lines do not appear on stdout in machine modes.
+- [ ] In machine modes, avoid ad hoc stderr chatter; represent warnings and diagnostic paths in machine metadata when possible (direct-value/pipeline commands may use stderr for warnings/errors while keeping stdout value-only).
 - [ ] For direct-value / JSONL pipeline commands, stdout stays value-only even on expected failures (errors go to stderr + exit codes).
 - [ ] Direct-value machine contracts are still versioned via an explicit selector (`--porcelain=v1`, `--format-version 1`, etc.).
+- [ ] Explicit selectors override convenience flags (e.g. `--porcelain=v2` wins over `--json`).
+- [ ] Interaction-required refusal is represented per contract style: envelope emits a versioned error envelope on stdout; direct-value emits a stderr error + exit code while keeping stdout value-only.
 
 ## Binary / file outputs
 
-- [ ] Binary-producing commands either reject machine mode (exit `2`) or emit metadata-only JSON while writing bytes elsewhere.
+- [ ] Binary-producing commands either reject `--json` (exit `2`) and write bytes to stdout (raw mode), or emit metadata-only JSON and write bytes to a separate destination (file path, temp file, or explicit `--output-file`).
 
 ## Target / profile / alias behavior (service-like CLIs)
 
