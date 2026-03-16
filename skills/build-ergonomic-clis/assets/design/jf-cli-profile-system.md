@@ -10,6 +10,7 @@ The profile system allows the CLI to manage credentials for multiple Jellyfin se
 - **Base URL inheritance**: Each host declares a `baseUrl`. Profiles inherit it by default but may override it (e.g. different port or path on the same hostname).
 - **Profile names are unique per host, not globally**. Two hosts may each have a profile named `admin`.
 - **Zero-config default**: A single server with a single profile requires no flags or env vars — it just works.
+- **Optional hostname aliases**: Each host may declare short aliases (e.g. `home`, `nas`). Aliases are not globally unique — multiple hosts may share an alias — but the CLI warns on ambiguity.
  
 ---
  
@@ -38,6 +39,10 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
       // All profiles under this host inherit this unless they override it.
       "baseUrl": "<url>",
  
+      // Optional short aliases for this host (e.g. ["home", "main-server"]).
+      // Non-unique across hosts — multiple hosts may share an alias.
+      "aliases": ["<alias>"],
+
       // Name of the default profile for this host.
       // Must be a key in this host's "profiles".
       "defaultProfile": "<profile-name>",
@@ -69,6 +74,7 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
   "hosts": {
     "jf.home.example.com": {
       "baseUrl": "https://jf.home.example.com",
+      "aliases": ["home", "jf"],
       "defaultProfile": "main",
       "profiles": {
         "main": {
@@ -83,6 +89,7 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
     },
     "nas.local": {
       "baseUrl": "https://nas.local:8096/jellyfin",
+      "aliases": ["nas"],
       "defaultProfile": "admin",
       "profiles": {
         "admin": {
@@ -107,6 +114,7 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
 | `defaultHost` | No | Hostname of the default server. If absent, requires explicit `--server` or `JF_SERVER`. |
 | `hosts` | Yes | Map of hostname → host object. |
 | `hosts[].baseUrl` | Yes | Default base URL for all profiles under this host. |
+| `hosts[].aliases` | No | List of short aliases for this host. Non-unique across hosts. Used during host lookup. |
 | `hosts[].defaultProfile` | No | Default profile name for this host. If absent: inferred if there is exactly one profile, otherwise error. |
 | `hosts[].profiles` | Yes | Map of profile name → profile object. At least one required. |
 | `profiles[].baseUrl` | No | Overrides the host-level `baseUrl` for this profile. |
@@ -127,11 +135,23 @@ Evaluated in order, first match wins:
  
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--server <value>` flag | If a full URL: extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname: use directly as lookup key. |
+| 1 | `--server <value>` flag | If a full URL: extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname or alias: see lookup order below. |
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
 | 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <hostname>` |
+
+**Lookup order for a bare hostname/alias value:**
+
+1. Exact match against `hosts` keys (hostname).
+2. Alias match: scan all hosts for one whose `aliases` array contains the value.
+   - If exactly one host matches: use it.
+   - If multiple hosts match: use the first match (config file order) and emit a warning:
+     ```
+     Warning: alias "home" is defined on multiple hosts: jf.home.example.com, backup.example.com
+     Using jf.home.example.com. To suppress, make aliases unique or use the full hostname.
+     ```
+3. No match: error.
  
 ### 3.2 Profile Resolution
  
@@ -160,8 +180,13 @@ The final resolved base URL is used for all API requests in that invocation.
 ### 3.4 Resolution Summary
  
 ```
---server / JF_SERVER ──→ extract hostname ──→ host lookup
-                                                  │
+--server / JF_SERVER ──→ extract hostname ──→ exact host key match
+                                                  │ (no match)
+                                                  ▼
+                                           alias scan across hosts
+                                           ├── 1 match  ──→ use it
+                                           ├── 2+ match ──→ warn, use first
+                                           └── 0 match  ──→ error
        ┌──────────────────────────────────────────┘
        ▼
   --profile / JF_PROFILE ──→ profile lookup within host
@@ -324,9 +349,11 @@ jf auth host list
 **Output format:**
  
 ```
-* jf.home.example.com  https://jf.home.example.com       (2 profiles)
-  nas.local             https://nas.local:8096/jellyfin    (2 profiles)
+* jf.home.example.com  https://jf.home.example.com       (2 profiles)  [home, jf]
+  nas.local             https://nas.local:8096/jellyfin    (2 profiles)  [nas]
 ```
+ 
+Aliases column is omitted if no host has any aliases.
  
 #### `jf auth host use <hostname>`
  
@@ -357,6 +384,47 @@ jf auth host delete <hostname> [--force]
 ```
  
 Removes the host entry and all profiles within it. Without `--force`, prompts for confirmation if the host has more than one profile. Clears `defaultHost` if it pointed to this host.
+ 
+#### `jf auth host alias add <hostname> <alias>`
+ 
+Add an alias for an existing host.
+ 
+```
+jf auth host alias add <hostname> <alias>
+```
+ 
+Appends `<alias>` to the host's `aliases` list. If the alias already exists on another host, a warning is emitted:
+ 
+```
+Warning: alias "home" is already used by jf.home.example.com
+```
+ 
+The alias is still added — duplicates are allowed but discouraged.
+ 
+#### `jf auth host alias remove <hostname> <alias>`
+ 
+Remove an alias from a host.
+ 
+```
+jf auth host alias remove <hostname> <alias>
+```
+ 
+Removes `<alias>` from the host's `aliases` list. Errors if the alias is not set on that host.
+ 
+#### `jf auth host alias list [<hostname>]`
+ 
+List aliases.
+ 
+```
+jf auth host alias list [<hostname>]
+```
+ 
+Without `<hostname>`: lists all hosts with their aliases. With `<hostname>`: lists aliases for that host only. Flags duplicate aliases across hosts:
+ 
+```
+jf.home.example.com  [home, jf]
+nas.local             [nas, home]  ← WARNING: "home" is also set on jf.home.example.com
+```
  
 ---
  
@@ -430,6 +498,19 @@ Hostnames are lowercased before use as config keys. `NAS.local` and `nas.local` 
 ### Token expiry
  
 Token expiry detection is outside the scope of this spec. The CLI should handle HTTP 401 responses gracefully and prompt re-authentication, but the profile system itself does not track expiry.
+ 
+### Duplicate aliases
+ 
+Multiple hosts may share an alias. When a lookup matches more than one host:
+ 
+- The first matching host in config file order is used.
+- A warning is printed to stderr:
+  ```
+  Warning: alias "home" is defined on multiple hosts: jf.home.example.com, backup.example.com
+  Using jf.home.example.com. To suppress, make aliases unique or use the full hostname.
+  ```
+ 
+This is by design — the user is informed rather than blocked, and the tie-break is deterministic.
  
 ### Concurrent config writes
  
