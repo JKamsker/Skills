@@ -143,7 +143,7 @@ Evaluated in order, first match wins:
 
 **Lookup order for a bare hostname/alias value:**
 
-1. Exact match against `hosts` keys (hostname).
+1. Exact match against `hosts` keys (hostname). If found, use it — alias scan is skipped entirely, even if another host has a matching alias.
 2. Alias match: scan all hosts for one whose `aliases` array contains the value.
    - If exactly one host matches: use it.
    - If multiple hosts match: use the first match (config file order) and emit a warning:
@@ -400,6 +400,14 @@ Warning: alias "home" is already used by jf.home.example.com
 ```
  
 The alias is still added — duplicates are allowed but discouraged.
+
+If `<alias>` matches an existing host key (e.g. adding alias `nas.local` to some other host), an additional warning is emitted:
+
+```
+Warning: alias "nas.local" matches an existing host key and will always be shadowed by it.
+```
+
+The alias is stored but will never be reachable via that value as long as the host key exists.
  
 #### `jf auth host alias remove <hostname> <alias>`
  
