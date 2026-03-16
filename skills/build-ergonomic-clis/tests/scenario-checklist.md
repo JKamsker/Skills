@@ -15,7 +15,7 @@ Apply this checklist to a designed CLI contract (and to implementations where ap
 - [ ] “Expected failures” (domain errors like not-found/not-authenticated/conflict) are represented per the contract style; they are not treated like unclassified crashes.
 - [ ] `--output json` / `--json` expected failure produces valid, versioned machine output on stdout (for envelope-style designs).
 - [ ] Banners/prompts/human-formatted warning lines do not appear on stdout in machine modes.
-- [ ] In machine modes, avoid ad hoc stderr chatter; represent warnings and diagnostic paths in machine metadata when possible (direct-value/pipeline commands may use stderr for warnings/errors while keeping stdout value-only).
+- [ ] In machine modes, avoid ad hoc stderr chatter; represent warnings and diagnostic paths in machine metadata when possible (direct-value / pipeline commands may use stderr for warnings/errors while keeping stdout value-only).
 - [ ] For direct-value / JSONL pipeline commands, stdout stays value-only even on expected failures (errors go to stderr + exit codes).
 - [ ] Direct-value machine contracts are still versioned via an explicit selector (`--porcelain=v1`, `--format-version 1`, etc.).
 - [ ] Explicit selectors override convenience flags (e.g. `--porcelain=v2` wins over `--json`).

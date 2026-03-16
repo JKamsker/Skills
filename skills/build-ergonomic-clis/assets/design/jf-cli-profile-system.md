@@ -334,7 +334,7 @@ jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--server` | Yes (for first login) | Server URL (or scheme-less `host:port`). Hostname extracted as config key; URL stored as `baseUrl`. |
-| `--profile` | No | Profile name. Default: prompts interactively, or `"default"` in non-interactive mode. |
+| `--profile` | No | Profile name. Default: prompts in human mode when a TTY is present; otherwise uses `"default"` (including in `--json`). |
 | `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. Required in `--json` mode (no prompts). |
 | `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login (no prompts). |
 | `--quick-connect` | No | Use the Quick Connect device-flow-style login (interactive). Refuses in machine output modes. |
@@ -502,8 +502,9 @@ jf auth host delete <hostname> [--yes] [--dry-run]
  
 Removes the host entry and all profiles within it. Follows the global confirmation rules:
 
-- without `--yes`, prompts for confirmation (TTY-only)
+- without `--yes`, prompts for confirmation (TTY-only, human mode only)
 - with `--quiet` or without a TTY, refuses with exit `2` unless `--yes` or `--dry-run` is provided
+- in `--json`, never prompts; refuses with exit `2` unless `--yes` or `--dry-run` is provided
 
 Clears `defaultHost` if it pointed to this host.
  

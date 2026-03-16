@@ -184,7 +184,7 @@ Guardrails:
 
 - Protected commands should fail with a precise recovery message when auth is missing.
 - Do not open a login prompt from unrelated commands.
-- Only prompt in explicit auth commands and only when a TTY is present.
+- Only prompt in explicit auth commands, only in human output modes, and only when stdin and stderr are TTYs.
 
 If many commands require auth, enforce it centrally with an interceptor or a pre-execution service.
 
@@ -195,7 +195,7 @@ Use Spectre rich output for humans, but keep automation stable.
 - Inject `IAnsiConsole` into commands instead of using static `AnsiConsole`.
 - Send structured machine output through a single serializer path.
 - Keep `--json` behavior identical across commands.
-- Prompt on stderr, not stdout. In machine modes, avoid ad hoc stderr chatter; represent warnings/diagnostics in the machine contract metadata when possible.
+- Human prompts go to stderr, not stdout. Machine output modes never prompt; avoid ad hoc stderr chatter and represent warnings/diagnostics in the machine contract metadata when possible.
 
 If the command can emit either tables or JSON, make that switch early in the command handler so the rest of the logic stays clean.
 

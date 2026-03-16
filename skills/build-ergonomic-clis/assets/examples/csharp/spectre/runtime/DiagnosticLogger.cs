@@ -106,6 +106,16 @@ public sealed class DiagnosticLogger
 
         foreach (var header in headers)
         {
+            var keyLower = header.Key.ToLowerInvariant();
+            var looksSensitiveByName =
+                keyLower.Contains("authorization")
+                || keyLower.Contains("cookie")
+                || keyLower.Contains("token")
+                || keyLower.Contains("secret")
+                || keyLower.Contains("password")
+                || keyLower.Contains("apikey")
+                || keyLower.Contains("api-key");
+
             var isSensitive =
                 header.Key.Equals("Authorization", StringComparison.OrdinalIgnoreCase)
                 || header.Key.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase)
@@ -115,6 +125,8 @@ public sealed class DiagnosticLogger
                 || header.Key.Equals("X-Auth-Token", StringComparison.OrdinalIgnoreCase)
                 || header.Key.Equals("X-Access-Token", StringComparison.OrdinalIgnoreCase)
                 || header.Key.Equals("X-Amz-Security-Token", StringComparison.OrdinalIgnoreCase);
+
+            isSensitive |= looksSensitiveByName;
 
             var rawValue = string.Join(", ", header.Value);
             var value = isSensitive ? "REDACTED" : RedactPotentialSecrets(rawValue);

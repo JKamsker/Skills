@@ -1,3 +1,5 @@
+use std::fmt;
+
 use url::Url;
 
 // This example shows *context inference* for a git-like CLI.
@@ -36,6 +38,14 @@ pub struct ResolvedTarget {
 
 #[derive(Debug, Clone)]
 pub struct CliError(pub String);
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for CliError {}
 
 pub fn resolve_target(
     args: &TargetArgs,

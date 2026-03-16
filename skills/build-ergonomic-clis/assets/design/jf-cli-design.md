@@ -679,7 +679,7 @@ Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--
 - Tables via `Spectre.Console` for list commands (e.g., `jf items list`, `jf users list`).
 - Key-value panels for single-entity commands (e.g., `jf server info`, `jf users get`).
 - Progress spinners for long operations (e.g., `jf libraries scan`, `jf items refresh`).
-- Prompts and warnings on **stderr**, never stdout.
+- Prompts (human mode) and human-formatted warnings on **stderr**, never stdout.
 - Secrets are redacted in human output (tokens shown as `eyJ...xxxxx`).
 
 ### Machine output (`--json`)
@@ -822,7 +822,7 @@ executing. These include:
 
 | Flags passed | Behavior |
 |---|---|
-| (none) | Prompt for confirmation on stderr if TTY present. If no TTY, fail with exit 2. |
+| (none) | Human mode: prompt for confirmation on stderr if TTY present. If no TTY, fail with exit 2. Machine output mode (`--json`): never prompt; refuse (exit 2) unless `--yes` or `--dry-run` is present. |
 | `--dry-run` | Print a preview and exit 0. Never prompt, never mutate. |
 | `--yes` | Skip prompt, execute immediately. |
 | `--dry-run --yes` | `--dry-run` wins. Preview only, exit 0. |
@@ -831,6 +831,8 @@ executing. These include:
 | `--quiet --dry-run` | Print preview, exit 0. No prompt. |
 
 ### Confirmation prompt format
+
+Human mode only (machine output mode refuses instead of prompting):
 
 ```
 Are you sure you want to delete "My Movie" (abc123)?
@@ -917,7 +919,7 @@ jf items delete a1b2c3d4 --dry-run
 #     Path: /media/movies/Bad Movie (2023)
 #   No changes made.
 
-# Actually delete it (will prompt for confirmation)
+# Actually delete it (will prompt for confirmation in human mode)
 jf items delete a1b2c3d4
 # Output:
 #   Are you sure you want to delete "Bad Movie" (a1b2c3d4)?

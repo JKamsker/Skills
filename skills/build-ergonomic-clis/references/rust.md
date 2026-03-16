@@ -200,7 +200,7 @@ Keep one output abstraction for humans and machines.
 
 - Table or rich human output by default
 - `--json` or `--output json` for stable machine output
-- prompts on stderr; in machine modes, avoid ad hoc stderr chatter and prefer structured warnings/diagnostics in machine output metadata when possible
+- prompts (human mode) on stderr; machine output modes never prompt, and should avoid ad hoc stderr chatter and prefer structured warnings/diagnostics in machine output metadata when possible
 - secret redaction in config or auth displays
 
 If the tool has a `--dry-run` mode, print the resolved request shape and exit before making network calls.

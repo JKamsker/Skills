@@ -92,15 +92,14 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             RenderNetworkError(ex, logPath, resolved.OutputMode);
             return 8;
         }
-        catch (OperationCanceledException ex)
+        catch (TaskCanceledException ex)
         {
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-            if (!settings.IsUserCancellation)
-            {
-                RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);
-                return 8;
-            }
-
+            RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);
+            return 8;
+        }
+        catch (OperationCanceledException)
+        {
             RenderCliError(CliException.Cancelled("Cancelled."), resolved.OutputMode);
             return 10;
         }
@@ -228,6 +227,18 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             value,
             "\"(?<key>token|accessToken|access_token|refreshToken|refresh_token|idToken|id_token|apiKey|api_key|apikey|clientSecret|client_secret|password|secret)\"\\s*:\\s*\"(?<value>[^\"]+)\"",
             match => $"\"{match.Groups["key"].Value}\":\"REDACTED\"",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        value = System.Text.RegularExpressions.Regex.Replace(
+            value,
+            @"(^|\s)--(?<key>token|access-token|access_token|refresh-token|refresh_token|id-token|id_token|api-key|api_key|apikey|client-secret|client_secret|password|secret)\s+(?<val>\S+)",
+            match => $"{match.Groups[1].Value}--{match.Groups["key"].Value} REDACTED",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        value = System.Text.RegularExpressions.Regex.Replace(
+            value,
+            @"(^|\s)--(?<key>token|access-token|access_token|refresh-token|refresh_token|id-token|id_token|api-key|api_key|apikey|client-secret|client_secret|password|secret)=(?<val>\S+)",
+            match => $"{match.Groups[1].Value}--{match.Groups["key"].Value}=REDACTED",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
         return value;
