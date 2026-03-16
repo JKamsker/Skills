@@ -507,6 +507,12 @@ Hostnames are lowercased before use as config keys. `NAS.local` and `nas.local` 
  
 Token expiry detection is outside the scope of this spec. The CLI should handle HTTP 401 responses gracefully and prompt re-authentication, but the profile system itself does not track expiry.
  
+### Alias shadowed by host key
+ 
+If an alias value is identical to an existing host key, the host key always wins — the alias scan is never reached. The alias is effectively unreachable while that host key exists. This is intentional: host keys are authoritative identifiers; aliases are convenience shortcuts.
+ 
+`jf auth host alias add` warns when this situation is created (see §5.3).
+ 
 ### Duplicate aliases
  
 Multiple hosts may share an alias. When a lookup matches more than one host:
