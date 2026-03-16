@@ -18,8 +18,9 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 
 ### Design
 
-- Start with [references/ux-dx.md](references/ux-dx.md).
-- Define the command tree, help contract, auth and profile model, target resolution, env/config precedence, reserved flags, confirmation rules, machine output, and non-interactive behavior before talking about code structure.
+- Start with [references/cli-patterns.md](references/cli-patterns.md).
+- If the CLI connects to a remote service or API, also read [references/service-cli-patterns.md](references/service-cli-patterns.md) for auth, host/profile resolution, and HTTP diagnostics.
+- Define the command tree, help contract, env/config precedence, reserved flags, confirmation rules, machine output, and non-interactive behavior before talking about code structure.
 - Use [assets/design/jf-cli-design.md](assets/design/jf-cli-design.md) only when a worked self-hosted-service example would help benchmark the design after the first pass.
 - For the detailed host-keyed profile system specification (hostname resolution, aliases, migration, validation), see [assets/design/jf-cli-profile-system.md](assets/design/jf-cli-profile-system.md). Load this only when the design involves multi-server profile management.
 
@@ -41,20 +42,27 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 ## Default Rules
 
 - Prefer branches over flat command lists. `auth login` is better than `auth-login`.
-- Fail fast when auth or target resolution is missing. Do not start an interactive login flow from an unrelated command.
 - Do not read from stdin unless the user opted in with an explicit flag such as `--stdin` or `--password-stdin`, or the command is explicitly interactive and a TTY is present.
 - Commands without the required arguments should print help or raise a validation error, not guess an implicit target such as "latest".
-- Keep credentials separate from general config, and bind stored credentials to a canonical host key.
 - Define and document a single precedence order for flags, environment variables, config, and defaults.
+
+#### Additional rules for service CLIs
+
+- Fail fast when auth or target resolution is missing. Do not start an interactive login flow from an unrelated command.
+- Keep credentials separate from general config, and bind stored credentials to a canonical host key.
 
 ## Definition of Done
 
 - Produce a top-level command tree and justify the grouping in user-facing terms.
 - Make global flags, reserved flags, environment variables, and config/default precedence explicit.
-- Define auth, host, profile, credential-storage, and fallback-host behavior.
 - Define human output, machine output, stdout vs stderr rules, confirmation rules, and exit codes.
 - Include language-specific implementation notes only when implementation is in scope. For other languages, provide framework-agnostic guidance.
 - Include three to five validation checks or tests covering help, target resolution, non-interactive behavior, destructive flows, or machine-readable output.
+
+#### Additional items for service CLIs
+
+- Define auth, host, profile, credential-storage, and fallback-host behavior.
+- Define target resolution validation checks.
 
 ## Deliverables
 
@@ -63,8 +71,6 @@ When implementing or redesigning a CLI, produce these artifacts unless the user 
 - A top-level command tree and a short explanation of the grouping.
 - Global flags, reserved flags, environment variables, and config precedence.
 - Exact environment variable names and whether they mirror a flag or a legacy behavior.
-- Auth, host, profile, and fallback-host behavior.
-- Auth storage model and any canonical host-key rules.
 - Human output, machine output, confirmation, and exit code behavior.
 - Stdout vs stderr rules for prompts, warnings, streamed logs, and machine-readable output.
 - Error message strategy, diagnostic logging, and verbosity levels.
@@ -72,13 +78,21 @@ When implementing or redesigning a CLI, produce these artifacts unless the user 
 - Language-specific implementation changes and tests only when implementation is in scope. For other languages, provide framework-agnostic implementation guidance.
 - Three to five validation checks or tests.
 
+#### Additional deliverables for service CLIs
+
+- Auth, host, profile, and fallback-host behavior.
+- Auth storage model and any canonical host-key rules.
+
 ## Pre-Implementation Extraction Checklist
 
 Before you redesign a CLI, write down:
 
 - Top-level branches and any expert-only or privileged labels that should survive.
-- Exact auth modes and credential stores.
 - Exact environment variable names already in use.
-- Target-resolution order, fallback heuristics, and any git or directory inference.
 - Stdout vs stderr rules for prompts, banners, streamed logs, and machine output.
 - Domain-specific verbs or diagnostic commands that are part of the CLI's value, even if they do not fit a tiny generic verb set.
+
+#### Additional extraction for service CLIs
+
+- Exact auth modes and credential stores.
+- Target-resolution order, fallback heuristics, and any git or directory inference.

@@ -24,7 +24,7 @@
 
 ## 1. Overview
 
-> **Related documents:** For the broader CLI design (command tree, output modes, exit codes), see [`jf-cli-design.md`](jf-cli-design.md). For generic self-hosted service patterns (hostname normalization, single-entry inference, migration), see [`../../references/ux-dx.md`](../../references/ux-dx.md).
+> **Related documents:** For the broader CLI design (command tree, output modes, exit codes), see [`jf-cli-design.md`](jf-cli-design.md). For generic self-hosted service patterns (hostname normalization, single-entry inference, migration), see [`../../references/service-cli-patterns.md`](../../references/service-cli-patterns.md).
  
 The profile system allows the CLI to manage credentials for multiple Jellyfin servers and multiple accounts per server. Profiles are organized by hostname, with a two-level resolution chain: first resolve the host, then resolve the profile within that host.
  

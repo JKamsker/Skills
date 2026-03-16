@@ -391,7 +391,7 @@ These flags are available on every command via `GlobalSettings`:
 | `--help` | `-h` | bool | Show help (Spectre built-in) |
 | `--version` | `-V` | bool | Show version (Spectre built-in) |
 
-**Note**: The generic pattern in `references/ux-dx.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a bare hostname, or an alias — not strictly a hostname.
+**Note**: The generic pattern in `references/service-cli-patterns.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a bare hostname, or an alias — not strictly a hostname.
 
 **Note**: `--force` is intentionally omitted from globals. It will only appear on
 specific commands where "bypass a conflict" has an unambiguous meaning (e.g., force-overwriting
@@ -1649,7 +1649,7 @@ common single-server case via single-entry inference. See `jf-cli-profile-system
 specification.
 
 **Why `--server` instead of `--host`?**
-The generic CLI pattern in `references/ux-dx.md` uses `--host`, which is appropriate when the value
+The generic CLI pattern in `references/service-cli-patterns.md` uses `--host`, which is appropriate when the value
 is always a network hostname. This CLI accepts a full URL, a bare hostname, or an alias — so
 `--server` more accurately describes what the flag accepts. The short flag is `-S` (not `-H`) to
 match.
