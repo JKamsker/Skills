@@ -87,7 +87,7 @@ jf
  |    |-- host
  |    |    |-- list                List configured hosts
  |    |    |-- use <hostname>      Set the default host
- |    |    |-- rename <old> <new>  Rename a host key
+ |    |    |-- rename <old> <new>  Rename a hostname key
  |    |    |-- delete <hostname>   Remove a host and its profiles  [confirm]
  |    |    |-- alias
  |    |    |    |-- add <hostname> <alias>    Add an alias
@@ -645,7 +645,7 @@ Hosts are keyed by network hostname (lowercased). Profiles are nested under thei
 
 `JF_TOKEN` is specifically for CI/automation pipelines where storing a profile is undesirable.
 When set, it takes precedence over any stored credential for the resolved host.
-If `JF_TOKEN` is set and the **selected server input** is a full URL (`--server` or `JF_SERVER`), the CLI may allow a config-less ephemeral context for that invocation when no configured host/alias matches the hostname (no config writes, no secret-store access).
+If `JF_TOKEN` is set and the **selected server input** is a full URL (or scheme-less `host:port`) (`--server` or `JF_SERVER`), the CLI may allow a config-less ephemeral context for that invocation when no configured host/alias matches the hostname (no config writes, no secret-store access).
 
 ---
 
@@ -663,7 +663,7 @@ These flags are reserved across the entire CLI and must not be repurposed by ind
 | `-v`, `--verbose` | Increase verbosity |
 | `-q`, `--quiet` | Suppress banners and prompts; fail if confirmation needed |
 | `--no-color` | Disable ANSI formatting |
-| `-S`, `--server` | Target server (hostname, alias, or URL) |
+| `-S`, `--server` | Target server (hostname, alias, scheme-less `host:port`, or full URL) |
 | `--profile` | Named profile |
 | `--config` | Config file path |
 

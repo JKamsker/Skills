@@ -73,6 +73,7 @@ Reserve consistent flags and branches for consistent jobs.
 - `--dry-run`: preview a mutating operation without side effects; prefer this as the primary safety flag
 - `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect
 - `--json` or `--output json`: stable machine output (selects the default stable version, currently v1)
+- `--output human` (or `--no-json`): force human output and override env/config/profile output defaults
 - `--verbose` or `-v`: increase output detail; repeat for more (`-vv`, `-vvv`) if the tool has multiple verbosity tiers
 - `--no-color`: disable ANSI formatting; also respect the `NO_COLOR` environment variable (see https://no-color.org/)
 - `--quiet`: suppress human-oriented banners, status chatter, and prompts
@@ -115,7 +116,7 @@ Bad patterns:
 
 Rules:
 
-- When the **resolved output mode** is a machine output mode (selected via `--json`, `--output json`, porcelain selectors, or env/config defaults), the CLI is non-interactive: no prompts, no browser launches, no banners.
+- When the **resolved output mode** is a machine output mode (selected via `--json`, `--output json`, porcelain selectors, or env/config/profile defaults), the CLI is non-interactive: no prompts, no browser launches, no banners.
 - If a prompt is required and the tool is in `--quiet` mode, fail (exit `2`) and tell the user to pass the missing flag, use `--dry-run` to inspect first, or use `--yes` only when bypassing a destructive confirmation is intentional.
 - If a command supports interactive prompts, only do so when stdin and stderr are TTYs. If a prompt would be required but a TTY is not available, refuse (exit `2`) with an actionable message.
 - Prompt on stderr, not stdout.
@@ -206,7 +207,7 @@ Regardless of style:
 
 - Do not print banners, prompts, or **human-formatted warning lines** to stdout when machine mode is enabled.
 - Redact secrets in all output (including errors and diagnostics).
-- In machine modes **with metadata** (envelope/porcelain), prefer structured warnings inside the machine contract (`meta.warnings`, porcelain fields, etc.) over ad hoc stderr chatter.
+- In machine modes **with metadata** (envelope/porcelain), warnings MUST be represented inside the machine contract (`meta.warnings`, porcelain fields, etc.), not as ad hoc stderr chatter.
 
 ## Output and Exit Codes
 
@@ -256,7 +257,7 @@ Flag interaction rules:
 |---|---|
 | (none) | Human mode: prompt for confirmation if the command is destructive (only when stdin and stderr are TTYs); otherwise refuse (exit `2`). Machine output modes: never prompt; refuse (exit `2`) unless `--yes` or `--dry-run` is present. |
 | `--dry-run` | Print a preview of the operation and exit. Never prompt, never mutate. The preview respects the resolved output mode (human-readable vs machine contract). |
-| `--yes` | Skip the confirmation prompt and execute. |
+| `--yes` | Skip the confirmation prompt and execute. Never prompt; in machine modes stdout still carries the machine contract. |
 | `--dry-run --yes` | `--dry-run` wins. Print the preview and exit without mutating. |
 | `--quiet` | If confirmation would be required, fail (exit `2`) with an error telling the user to pass `--yes` or `--dry-run`. Never prompt. |
 | `--quiet --yes` | Skip the confirmation prompt and execute. In human mode, this may be silent on success; in machine mode, stdout still carries the machine contract. |
@@ -284,6 +285,8 @@ Define `--dry-run` as a guarantee:
 
 - Never mutates state.
 - Explains what would happen (the plan), including the resolved target and key parameters.
+- Never prompts.
+- The preview respects the resolved output mode (human-readable vs machine contract).
 - Local reads are allowed.
 - Remote reads are allowed only if the command explicitly documents live planning/validation.
 - Never silently performs side effects.
@@ -366,7 +369,7 @@ Use `--verbose` to surface diagnostic detail on stderr without requiring the use
 Rules:
 
 - `--verbose` output goes to stderr, never stdout. Stdout stays clean for data and `--json`.
-- `--quiet` suppresses all verbose output. It does not suppress diagnostic file writes.
+- `--quiet` suppresses all verbose stderr chatter. It does not suppress diagnostic file writes.
 - The diagnostic log file always captures `-vvv`-level detail regardless of the verbosity flag.
 - If the CLI supports retries, log each attempt with its status so the user can see what happened before the final failure.
 

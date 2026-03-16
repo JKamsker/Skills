@@ -229,10 +229,10 @@ The final resolved base URL is used for all API requests in that invocation.
 ### 3.4 Resolution Summary
  
 ```
---server / JF_SERVER ──→ extract hostname ──→ exact host key match
-                                                  │ (no match)
-                                                  ▼
-                                           alias scan across hosts
+--server / JF_SERVER ──→ extract hostname ──→ exact hostname key match
+                                                   │ (no match)
+                                                   ▼
+                                            alias scan across hosts
                                            ├── 1 match  ──→ use it
                                            ├── 2+ match ──→ warn, use first
                                            └── 0 match  ──→ error
@@ -290,12 +290,12 @@ resolve(serverArg, profileArg):
   // If the input is scheme-less host:port, treat it as URL-like by adding a default scheme first.
   urlInput = withDefaultSchemeIfNeeded(hostInput)
   hostnameKey =
-    if looksLikeUrlInput(hostInput) then lower(parseUrl(urlInput).hostname)
+    if looksLikeUrlInput(urlInput) then lower(parseUrl(urlInput).hostname)
     else lower(hostInput)
 
   // CI/automation escape hatch: allow an ephemeral context with env token + full URL.
   // This bypasses config and the secret store and does not create or modify profiles.
-  if env.JF_TOKEN is set and looksLikeUrlInput(hostInput) and (config.hosts[hostnameKey] is missing) and (resolveAlias(hostnameKey) is missing):
+  if env.JF_TOKEN is set and looksLikeUrlInput(urlInput) and (config.hosts[hostnameKey] is missing) and (resolveAlias(hostnameKey) is missing):
     profileName = profileArg ?? env.JF_PROFILE ?? "default"
     effectiveBaseUrl = normalizeBaseUrl(urlInput)
     return (hostnameKey, profileName, effectiveBaseUrl, env.JF_TOKEN)
@@ -306,7 +306,7 @@ resolve(serverArg, profileArg):
   profile = host.profiles[profileName] ?? error()
 
   effectiveBaseUrl =
-    if looksLikeUrlInput(hostInput) then normalizeBaseUrl(urlInput) // invocation-only override
+    if looksLikeUrlInput(urlInput) then normalizeBaseUrl(urlInput) // invocation-only override
     else normalizeBaseUrl(profile.baseUrl ?? host.baseUrl)
 
   credentialKind = profile.authKind
@@ -332,38 +332,38 @@ Interactive login to a Jellyfin server. Creates or updates a host entry and prof
 ```
 jf auth login --server <url> [--profile <name>] [--username <USER>] [--password-stdin] [--quick-connect]
 ```
- 
+
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--server` | Yes (for first login) | Server URL (or scheme-less `host:port`). Hostname extracted as config key; URL stored as `baseUrl`. |
-| `--profile` | No | Profile name. Default: prompts in human mode when a TTY is present; otherwise uses `"default"` (including in `--json`). |
+| `--server` | Yes (for first login) | Server URL (or scheme-less `host:port`) when creating a new host entry. For existing hosts, this flag may also be a bare hostname or alias (uses stored `baseUrl` unless a full URL is supplied as an invocation-only override). |
+| `--profile` | No | Profile name. Default: for existing hosts, follows standard profile resolution (§3.2). When creating a new host entry, prompts in human mode when a TTY is present; otherwise uses `"default"` (including in machine output modes). |
 | `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. Required in `--json` mode (no prompts). |
 | `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login (no prompts). |
 | `--quick-connect` | No | Use the Quick Connect device-flow-style login (interactive). Refuses in machine output modes. |
-  
+
 **Flow:**
-  
-1. Resolve the server input (from `--server` or `JF_SERVER`) and extract hostname for the host key.
+
+1. Resolve the server input using standard host resolution (§3.1). If a full URL (or scheme-less `host:port`) was provided, extract the hostname for the hostname key.
 2. Perform the selected auth flow (password-based or quick-connect) and obtain an access token (see `jf-cli-design.md` for the detailed interaction contract).
 3. Create or update `hosts[hostname]`:
    - Set `baseUrl` on the host if this is a new host entry.
-    - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
-    - Store the credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (where `credentialKind` is `profile.authKind`).
-    - If this is the only host, set as `defaultHost`.
-    - If this is the only profile on the host, set as `defaultProfile`.
+   - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
+   - Store the credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (where `credentialKind` is `profile.authKind`).
+   - If this is the only host, set as `defaultHost`.
+   - If this is the only profile on the host, set as `defaultProfile`.
 4. Write config.
- 
+
 **Profile `baseUrl` override:** If the host already exists and the login URL differs from the host's `baseUrl`, store the login URL as a profile-level `baseUrl` override.
- 
+
 #### `jf auth logout`
-  
+
 Best-effort revoke and remove the stored credential for a profile.
-  
+
 ```
 jf auth logout [--server <host>] [--profile <name>]
 ```
-  
-Resolves host and profile via standard resolution (§3). Revokes the token server-side if possible, then removes the stored credential from the secret store.
+
+Resolves host and profile via standard resolution (§3). Removes the stored credential from the secret store. If the profile uses token auth and the server supports revocation, performs a best-effort server-side revoke. For API keys, use `jf auth api-keys delete` to revoke server-side.
 
 This command does not remove the profile metadata from config. Use `jf auth profiles delete <name>` to remove a profile entirely.
  
@@ -388,9 +388,9 @@ jf.home.example.com (default host)
     admin — API key
  
 nas.local
-  baseUrl: https://nas.local:8096/jellyfin
+  baseUrl: http://nas.local:8096/jellyfin
   * admin (default) — admin
-    legacy — admin (baseUrl: http://nas.local:8920)
+    legacy — admin (baseUrl: https://nas.local:8920)
 ```
  
 - `*` marks the default profile.
@@ -481,17 +481,17 @@ Set the global default host.
 ```
 jf auth host use <hostname>
 ```
- 
+
 Sets `defaultHost` in config. Errors if the hostname is not in `hosts`.
- 
+
 #### `jf auth host rename <old> <new>`
- 
-Rename a host key.
- 
+
+Rename a hostname key.
+
 ```
 jf auth host rename <old-hostname> <new-hostname>
 ```
- 
+
 Renames the key in `hosts`. Updates `defaultHost` if it pointed to the old name. Does not change any `baseUrl` values.
  
 #### `jf auth host delete <hostname>`
@@ -547,13 +547,13 @@ Example (`--json`):
 }
 ```
 
-If `<alias>` matches an existing host key (e.g. adding alias `nas.local` to some other host), an additional warning is emitted:
+If `<alias>` matches an existing hostname key (e.g. adding alias `nas.local` to some other host), an additional warning is emitted:
 
 ```
-Warning: alias "nas.local" matches an existing host key and will always be shadowed by it.
+Warning: alias "nas.local" matches an existing hostname key and will always be shadowed by it.
 ```
 
-The alias is stored but will never be reachable via that value as long as the host key exists.
+The alias is stored but will never be reachable via that value as long as the hostname key exists.
  
 #### `jf auth host alias remove <hostname> <alias>`
  
@@ -673,9 +673,9 @@ Hostnames are lowercased before use as config keys. `NAS.local` and `nas.local` 
  
 Token expiry detection is outside the scope of this spec. The CLI should handle HTTP 401 responses gracefully and require re-authentication (exit `3` with an actionable recovery command), but it must never start an interactive login flow from non-auth commands and must never prompt in `--json` mode.
  
-### Alias shadowed by host key
+### Alias shadowed by hostname key
  
-If an alias value is identical to an existing host key, the host key always wins — the alias scan is never reached. The alias is effectively unreachable while that host key exists. This is intentional: host keys are authoritative identifiers; aliases are convenience shortcuts.
+If an alias value is identical to an existing hostname key, the hostname key always wins — the alias scan is never reached. The alias is effectively unreachable while that hostname key exists. This is intentional: hostname keys are authoritative identifiers; aliases are convenience shortcuts.
  
 `jf auth host alias add` warns when this situation is created (see §5.3).
  

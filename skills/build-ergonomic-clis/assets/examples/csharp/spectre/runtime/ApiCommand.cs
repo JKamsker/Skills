@@ -155,7 +155,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
 
         Console.Error.WriteLine($"Network error: {RedactPotentialSecrets(ex.Message)}");
         if (!string.IsNullOrWhiteSpace(logPath))
-            Console.Error.WriteLine($"Diagnostic log: {logPath}");
+            Console.Error.WriteLine($"Diagnostic log: {SanitizeLogPath(logPath)}");
     }
 
     private static void RenderUnexpectedError(Exception ex, string? logPath, OutputMode outputMode)
@@ -174,13 +174,14 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
 
         Console.Error.WriteLine("Unexpected client error.");
         if (!string.IsNullOrWhiteSpace(logPath))
-            Console.Error.WriteLine($"Diagnostic log: {logPath}");
+            Console.Error.WriteLine($"Diagnostic log: {SanitizeLogPath(logPath)}");
     }
 
     private static string KindForExitCode(int exitCode)
     {
         return exitCode switch
         {
+            1 => "unexpected",
             2 => "usage",
             3 => "not_authenticated",
             4 => "not_authorized",
@@ -211,12 +212,12 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
 
         value = System.Text.RegularExpressions.Regex.Replace(
             value,
-            @"\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b",
+            @"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])",
             "REDACTED_JWT");
 
         value = System.Text.RegularExpressions.Regex.Replace(
             value,
-            @"\b(?<key>token|access_token|refresh_token|id_token|api_key|apikey|client_secret|password|secret)=(?<value>[^&\s]+)",
+            @"\b(?<key>token|access[-_]?token|refresh[-_]?token|id[-_]?token|api[-_]?key|client[-_]?secret|password|secret)=(?<value>[^&\s]+)",
             match => $"{match.Groups["key"].Value}=REDACTED",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 

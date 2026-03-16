@@ -20,7 +20,7 @@ For browser-capable service CLIs:
 
 - Prefer system browser plus PKCE or a service-native device/quick-connect flow.
 - Fall back to pasted tokens only when the service actually uses them.
-- In resolved machine output modes (selected via flags/env/config/profile defaults; for example: `--json`, `--output json`, `--porcelain=v1`), never auto-launch a browser or show interactive prompts. If auth would require user interaction (browser/device/quick-connect), refuse (exit `2`) and require a truly non-interactive alternative (for example: token via stdin) or instruct re-running in human mode.
+- In resolved machine output modes (selected via flags/env/config/profile defaults; for example: `--json`, `--output json`, `--porcelain=v1`), never auto-launch a browser or show interactive prompts. If auth would require user interaction (browser/device/quick-connect), refuse (exit `2`) and require a truly non-interactive alternative (for example: token via stdin) or instruct re-running in human mode (for example: pass `--output human` / `--no-json`, or unset the output env var).
 
 For API-token-based CLIs:
 
@@ -115,7 +115,7 @@ Every service-like CLI should present a one-page resolution sequence. A good tem
 3. Resolve **explicit profile/context/account selection** (if provided).
 4. Apply **defaults** (global default, per-target default, single-entry inference).
 5. If still unresolved and you support it, apply **context inference** (git remotes, workspace markers, directory discovery) and make it inspectable.
-6. Apply **alias rewrites** (if supported) and emit warnings on ambiguity.
+6. Apply **alias rewrites** (if supported) and handle ambiguity per documented policy (deterministic tie-break + warning, or hard error).
 7. Derive the **target identity key** (per the chosen mode).
 8. Look up **credentials** using the identity key (and the selected profile/context if applicable).
 9. Produce the final **effective target** used for network operations (base URL, timeouts, retries).
@@ -125,6 +125,7 @@ Rules:
 - If multiple profiles match and there is no default mapping, require an explicit selection instead of guessing.
 - If repo/directory inference exists, document it as a lower-priority fallback, not the primary contract.
 - In machine output modes, never prompt; return an actionable error (exit `2`).
+- In human output modes, only prompt when stdin and stderr are attached to a terminal; otherwise refuse (exit `2`) with an actionable message.
 
 ## Aliases, Inference, Validation, Migration
 
@@ -298,7 +299,7 @@ Non-HTTP example:
 
 - Do not store plaintext secrets in general config stores unless explicitly chosen and documented.
 - Do not log raw `Authorization`, cookies, tokens, or token-bearing CLI args in diagnostics.
-- Do not prompt unless stdin and stderr are attached to a terminal *and* the CLI is in a human output mode. Machine output modes never prompt; `--quiet` is not a sufficient guard.
+- Do not prompt unless stdin and stderr are attached to a terminal *and* the CLI is in a human output mode. Machine output modes never prompt; do not use `--quiet` as your only guard — also gate prompting on resolved output mode + TTY.
 - Do not silently pick the first matching profile when multiple profiles match a target; require `--profile` or a default mapping.
 
 ## Service CLI Design Checklist Additions

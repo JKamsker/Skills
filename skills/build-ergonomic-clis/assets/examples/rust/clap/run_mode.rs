@@ -120,6 +120,7 @@ pub fn write_raw_bytes(bytes: &[u8]) -> Result<(), CliError> {
     Ok(())
 }
 
+/// Human-readable dry-run preview (table mode). In machine output modes, emit a structured preview via `write_value`.
 pub fn print_dry_run(method: &str, url: &str, headers: &[(&str, &str)]) -> Result<(), CliError> {
     println!("{method} {url}");
     for (name, value) in headers {

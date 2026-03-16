@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace ExampleCli.Runtime;
 
@@ -23,7 +24,7 @@ public sealed record ResolvedContext(
     string BaseUrl,
     string TargetIdentityKey,
     string Profile,
-    string? Token,
+    [property: JsonIgnore] string? Token,
     AuthSource AuthSource,
     OutputMode OutputMode)
 {

@@ -10,8 +10,8 @@ namespace ExampleCli.Runtime;
 
 public sealed class DiagnosticLogger
 {
-    private static readonly Regex JwtPattern = new(@"\b[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b", RegexOptions.Compiled);
-    private static readonly Regex SecretParamPattern = new(@"\b(?<key>token|access_token|refresh_token|id_token|api_key|apikey|client_secret|password|secret)=(?<value>[^&\s]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex JwtPattern = new(@"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?![A-Za-z0-9_-])", RegexOptions.Compiled);
+    private static readonly Regex SecretParamPattern = new(@"\b(?<key>token|access[-_]?token|refresh[-_]?token|id[-_]?token|api[-_]?key|client[-_]?secret|password|secret)=(?<value>[^&\s]+)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public string? TryWrite(
         ResolvedContextSafe context,

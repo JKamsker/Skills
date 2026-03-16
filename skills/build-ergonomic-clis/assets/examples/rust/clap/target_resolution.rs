@@ -7,7 +7,7 @@ use url::Url;
 // Design choices in this sketch:
 // - Network operations use a normalized base URL (scheme + host + non-default port), dropping path/query/fragment.
 // - Remote inference yields a host hint; for http(s) remotes it preserves scheme + port, otherwise it yields hostname only.
-// - Identity comparisons for selecting a git remote use a hostname-key (lowercased hostname), not an origin-key.
+// - Identity comparisons for selecting a git remote use a hostname-key (lowercased hostname; IPv6 without brackets), not an origin-key.
 
 #[derive(Debug, Clone)]
 pub struct RepoArg {
@@ -187,7 +187,7 @@ pub fn hostname_identity_key(raw: &str) -> Result<String, CliError> {
     let host = url
         .host_str()
         .ok_or_else(|| CliError(format!("invalid base url '{base}': missing hostname")))?;
-    Ok(host.to_ascii_lowercase())
+    Ok(host.trim_matches(&['[', ']'][..]).to_ascii_lowercase())
 }
 
 fn select_remote<'a>(
