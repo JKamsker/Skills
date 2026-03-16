@@ -20,7 +20,7 @@ For browser-capable service CLIs:
 
 - Prefer system browser plus PKCE or a service-native device/quick-connect flow.
 - Fall back to pasted tokens only when the service actually uses them.
-- In machine output modes (`--json`, porcelain), never auto-launch a browser or show interactive prompts. Require an explicit non-interactive path (`--device`, `--token-stdin`, etc.) or refuse (exit `2`).
+- In resolved machine output modes (selected via `--json`, `--output json`, porcelain selectors, or env/config defaults), never auto-launch a browser or show interactive prompts. Require an explicit non-interactive path (`--device`, `--token-stdin`, etc.) or refuse (exit `2`).
 
 For API-token-based CLIs:
 
@@ -156,7 +156,7 @@ If the old-format config exists and the new format does not:
 - perform an automatic one-time migration on first run
 - back up the old file (`.bak`)
 - emit a brief stderr note in human mode
-- in machine output modes, represent it as a structured warning in the machine contract (avoid ad hoc stderr noise)
+- in machine output modes with metadata (envelope/porcelain), represent it as a structured warning in the machine contract (avoid ad hoc stderr noise)
 
 ## Config Store vs Secret Store (recommended)
 

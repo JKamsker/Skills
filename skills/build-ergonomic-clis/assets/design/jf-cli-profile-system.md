@@ -175,13 +175,13 @@ Evaluated in order, first match wins:
  
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--server <value>` flag | If a full URL: extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname or alias: see lookup order below. |
+| 1 | `--server <value>` flag | If a full URL (or scheme-less `host:port`): extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname or alias: see lookup order below. |
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
 | 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <hostname>` |
 
-**CI/automation escape hatch:** If `JF_TOKEN` is set and the selected server input is a **full URL**, the CLI may allow an ephemeral, config-less context:
+**CI/automation escape hatch:** If `JF_TOKEN` is set and the selected server input is a **full URL (or scheme-less `host:port`)**, the CLI may allow an ephemeral, config-less context:
 
 - If no configured host/alias matches the extracted hostname, treat it as an implicit host for this invocation.
 - Derive `hostnameKey` from the URL hostname and use the URL as the effective base URL.
@@ -220,7 +220,7 @@ Given a resolved host and profile:
  
 | Priority | Source | Description |
 |----------|--------|-------------|
-| 1 | `--server` full URL / `JF_SERVER` full URL | Used for this invocation only. Not persisted (except `jf auth login`, which writes/updates config). |
+| 1 | `--server` full URL (or scheme-less `host:port`) / `JF_SERVER` full URL (or scheme-less `host:port`) | Used for this invocation only. Not persisted (except `jf auth login`, which writes/updates config). |
 | 2 | Profile-level `baseUrl` | Override for this specific profile. |
 | 3 | Host-level `baseUrl` | Default for all profiles under this host. |
  
@@ -287,15 +287,17 @@ resolve(serverArg, profileArg):
   hostInput = serverArg ?? env.JF_SERVER ?? config.defaultHost ?? singleHostOrError()
 
   // Host lookup uses the hostname key (lowercased hostname).
+  // If the input is scheme-less host:port, treat it as URL-like by adding a default scheme first.
+  urlInput = withDefaultSchemeIfNeeded(hostInput)
   hostnameKey =
-    if isUrl(hostInput) then lower(parseUrl(hostInput).hostname)
+    if looksLikeUrlInput(hostInput) then lower(parseUrl(urlInput).hostname)
     else lower(hostInput)
 
   // CI/automation escape hatch: allow an ephemeral context with env token + full URL.
   // This bypasses config and the secret store and does not create or modify profiles.
-  if env.JF_TOKEN is set and isUrl(hostInput) and (config.hosts[hostnameKey] is missing) and (resolveAlias(hostnameKey) is missing):
+  if env.JF_TOKEN is set and looksLikeUrlInput(hostInput) and (config.hosts[hostnameKey] is missing) and (resolveAlias(hostnameKey) is missing):
     profileName = profileArg ?? env.JF_PROFILE ?? "default"
-    effectiveBaseUrl = normalizeBaseUrl(hostInput)
+    effectiveBaseUrl = normalizeBaseUrl(urlInput)
     return (hostnameKey, profileName, effectiveBaseUrl, env.JF_TOKEN)
 
   host = config.hosts[hostnameKey] ?? resolveAlias(hostnameKey) ?? error()
@@ -304,7 +306,7 @@ resolve(serverArg, profileArg):
   profile = host.profiles[profileName] ?? error()
 
   effectiveBaseUrl =
-    if isUrl(hostInput) then normalizeBaseUrl(hostInput) // invocation-only override
+    if looksLikeUrlInput(hostInput) then normalizeBaseUrl(urlInput) // invocation-only override
     else normalizeBaseUrl(profile.baseUrl ?? host.baseUrl)
 
   credentialKind = profile.authKind

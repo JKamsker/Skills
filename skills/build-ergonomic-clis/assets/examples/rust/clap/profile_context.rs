@@ -433,7 +433,7 @@ pub fn target_identity_hostname_key(normalized_base_url: &str) -> Result<String,
     let host = url
         .host_str()
         .ok_or_else(|| CliError::usage(format!("invalid base url '{normalized_base_url}': missing hostname")))?;
-    Ok(host.to_ascii_lowercase())
+    normalize_hostname(host)
 }
 
 fn first_non_empty<const N: usize>(candidates: [Option<String>; N]) -> Option<String> {

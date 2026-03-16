@@ -2,6 +2,7 @@ using Spectre.Console.Cli;
 using System;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ExampleCli.Runtime;
@@ -43,8 +44,8 @@ public sealed record JsonEnvelope(
 public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
     where TSettings : GlobalOptions
 {
-    // Note: Spectre.Console.Cli has changed the `ExecuteAsync` override signature across versions
-    // (some versions include a `CancellationToken`). Adapt the override signature to your version.
+    // This example targets Spectre.Console.Cli versions where `ExecuteAsync` includes a `CancellationToken`
+    // (for example: 0.53+). If your version differs, adjust the override signature accordingly.
     private readonly TargetResolver _resolver;
     private readonly DiagnosticLogger _diagnosticLogger;
 
@@ -56,7 +57,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         _diagnosticLogger = diagnosticLogger;
     }
 
-    public sealed override async Task<int> ExecuteAsync(CommandContext context, TSettings settings)
+    public sealed override async Task<int> ExecuteAsync(CommandContext context, TSettings settings, CancellationToken cancellationToken)
     {
         var outputMode = settings.OutputMode;
 
@@ -79,7 +80,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
 
         try
         {
-            return await ExecuteAsync(context, settings, resolved);
+            return await ExecuteAsync(context, settings, resolved, cancellationToken);
         }
         catch (CliException ex)
         {
@@ -94,20 +95,15 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (OperationCanceledException ex)
         {
-            // Heuristic: treat task cancellation that looks like an HTTP timeout as a timeout/network failure.
-            // In a real implementation, plumb an explicit CancellationToken to reliably distinguish
-            // user cancellation from timeouts.
-            if (ex is TaskCanceledException taskCancelled
-                && (taskCancelled.InnerException is TimeoutException
-                    || taskCancelled.Message.Contains("timed out", StringComparison.OrdinalIgnoreCase)))
+            if (cancellationToken.IsCancellationRequested)
             {
-                var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-                RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);
-                return 8;
+                RenderCliError(CliException.Cancelled("Cancelled."), resolved.OutputMode);
+                return 10;
             }
 
-            RenderCliError(CliException.Cancelled("Cancelled."), resolved.OutputMode);
-            return 10;
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
+            RenderNetworkError(new HttpRequestException("Request cancelled or timed out.", ex), logPath, resolved.OutputMode);
+            return 8;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -120,7 +116,8 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
     protected abstract Task<int> ExecuteAsync(
         CommandContext context,
         TSettings settings,
-        ResolvedContext resolved);
+        ResolvedContext resolved,
+        CancellationToken cancellationToken);
 
     private static void RenderCliError(CliException ex, OutputMode outputMode)
     {

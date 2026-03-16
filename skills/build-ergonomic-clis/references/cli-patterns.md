@@ -115,7 +115,7 @@ Bad patterns:
 
 Rules:
 
-- Machine output modes (`--json`, `--output json`, porcelain modes) are non-interactive: no prompts, no browser launches, no banners.
+- When the **resolved output mode** is a machine output mode (selected via `--json`, `--output json`, porcelain selectors, or env/config defaults), the CLI is non-interactive: no prompts, no browser launches, no banners.
 - If a prompt is required and the tool is in `--quiet` mode, fail (exit `2`) and tell the user to pass the missing flag, use `--dry-run` to inspect first, or use `--yes` only when bypassing a destructive confirmation is intentional.
 - If a command supports interactive prompts, only do so when stdin and stderr are TTYs. If a prompt would be required but a TTY is not available, refuse (exit `2`) with an actionable message.
 - Prompt on stderr, not stdout.
@@ -206,7 +206,7 @@ Regardless of style:
 
 - Do not print banners, prompts, or **human-formatted warning lines** to stdout when machine mode is enabled.
 - Redact secrets in all output (including errors and diagnostics).
-- In machine modes, prefer structured warnings inside the machine contract (`meta.warnings`, porcelain fields, etc.) over ad hoc stderr chatter.
+- In machine modes **with metadata** (envelope/porcelain), prefer structured warnings inside the machine contract (`meta.warnings`, porcelain fields, etc.) over ad hoc stderr chatter.
 
 ## Output and Exit Codes
 
@@ -254,8 +254,8 @@ Flag interaction rules:
 
 | Flags passed | Behavior |
 |---|---|
-| (none) | Human mode: prompt for confirmation if the command is destructive (TTY-only). Machine output modes: never prompt; refuse (exit `2`) unless `--yes` or `--dry-run` is present. |
-| `--dry-run` | Print a preview of the operation and exit. Never prompt, never mutate. |
+| (none) | Human mode: prompt for confirmation if the command is destructive (only when stdin and stderr are TTYs); otherwise refuse (exit `2`). Machine output modes: never prompt; refuse (exit `2`) unless `--yes` or `--dry-run` is present. |
+| `--dry-run` | Print a preview of the operation and exit. Never prompt, never mutate. The preview respects the resolved output mode (human-readable vs machine contract). |
 | `--yes` | Skip the confirmation prompt and execute. |
 | `--dry-run --yes` | `--dry-run` wins. Print the preview and exit without mutating. |
 | `--quiet` | If confirmation would be required, fail (exit `2`) with an error telling the user to pass `--yes` or `--dry-run`. Never prompt. |

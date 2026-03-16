@@ -25,7 +25,11 @@ public sealed record ResolvedContext(
     string Profile,
     string? Token,
     AuthSource AuthSource,
-    OutputMode OutputMode);
+    OutputMode OutputMode)
+{
+    public override string ToString()
+        => $"ResolvedContext {{ BaseUrl = {BaseUrl}, TargetIdentityKey = {TargetIdentityKey}, Profile = {Profile}, Token = REDACTED, AuthSource = {AuthSource}, OutputMode = {OutputMode} }}";
+}
 
 public sealed record ResolvedContextSafe(
     string BaseUrl,
