@@ -1,21 +1,39 @@
 ---
 name: build-ergonomic-clis
-description: Design, implement, refactor, or review ergonomic command-line applications with modern command trees, task-first help, clear auth and configuration UX, host and profile resolution, environment variable support, predictable scripting behavior, and no-surprises defaults. Use when working on CLI apps or CLI extensions in any language, especially C#/.NET with Spectre.Console.Cli and Rust with clap, or when a user asks for better CLI UX/DX, auth flows, self-hosted service configuration, reserved flags, non-interactive behavior, or command hierarchy design.
+description: Design, review, refactor, or implement product-grade command-line interfaces with task-first command trees, help, auth and configuration UX, host and profile resolution, env/config precedence, machine-readable output, confirmation rules, and predictable non-interactive behavior. Use for service CLIs, CLI extensions, and CLI UX/DX work, especially C#/.NET Spectre.Console.Cli and Rust clap apps. Do not use for shell one-liners, operating an existing third-party CLI, TUI apps, packaging or distribution tasks, or generic OpenAPI client generation. Output a command tree, precedence model, auth/profile contract, output and exit-code rules, and an implementation or review checklist.
 ---
 
-# Build Ergonomic Clis
+# Build Ergonomic CLIs
 
 Use this skill to design a CLI as a product surface instead of a thin dump of API endpoints or internal functions.
 
-## Workflow
+## When Not to Use This
 
-1. Start with [references/ux-dx.md](references/ux-dx.md).
-   Use it to design the command tree, help contract, auth and profile model, environment variable support, reserved flags, confirmation rules, and non-interactive behavior.
-2. Load exactly one implementation reference after the UX is settled.
-   - Use [references/csharp.md](references/csharp.md) for .NET and Spectre.Console.Cli.
-   - Use [references/rust.md](references/rust.md) for Rust and clap.
-3. If the user wants independent design exploration, prompt benchmarking, or blind CLI design, do not feed implementation-specific fixtures into the design phase.
-4. If comparison or review is requested, perform it only after the design is complete.
+- Do not use this skill for shell one-liners, grep or awk pipelines, or other ad hoc shell usage.
+- Do not use this skill when the task is only about operating an existing third-party CLI.
+- Do not use this skill for TUI or terminal-dashboard work, packaging and distribution work, or raw OpenAPI client generation.
+
+## Task Modes
+
+### Design
+
+- Start with [references/ux-dx.md](references/ux-dx.md).
+- Define the command tree, help contract, auth and profile model, target resolution, env/config precedence, reserved flags, confirmation rules, machine output, and non-interactive behavior before talking about code structure.
+- Use [references/jf-cli-design.md](references/jf-cli-design.md) only when a worked self-hosted-service example would help benchmark the design after the first pass.
+
+### Review
+
+- Extract the current command tree, precedence rules, auth flow, and output contract before proposing changes.
+- Compare the current behavior against the default rules and definition of done in this skill.
+- Report concrete UX/DX regressions first, then list implementation fixes or missing tests.
+
+### Implementation
+
+- Load exactly one implementation reference after the UX contract is settled.
+- Use [references/csharp.md](references/csharp.md) for .NET and Spectre.Console.Cli.
+- Use [references/rust.md](references/rust.md) for Rust and clap.
+- If the language is not C#/.NET or Rust, stop after the UX/DX design and translate it into framework-agnostic implementation guidance. Do not invent library-specific patterns.
+- Do not load [tests/fixtures/jellyfin-openapi.json](tests/fixtures/jellyfin-openapi.json) unless you are intentionally replaying the bundled Jellyfin benchmark.
 
 ## Default Rules
 
@@ -25,6 +43,15 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 - Commands without the required arguments should print help or raise a validation error, not guess an implicit target such as "latest".
 - Keep credentials separate from general config, and bind stored credentials to a canonical host key.
 - Define and document a single precedence order for flags, environment variables, config, and defaults.
+
+## Definition of Done
+
+- A top-level command tree exists and the grouping is justified in user-facing terms.
+- Global flags, reserved flags, environment variables, and config/default precedence are explicit.
+- Auth, host, profile, credential-storage, and fallback-host behavior are defined.
+- Human output, machine output, stdout vs stderr rules, confirmation rules, and exit codes are defined.
+- Language-specific implementation notes appear only when implementation is in scope. For other languages, provide framework-agnostic guidance.
+- Three to five validation checks or tests cover help, target resolution, non-interactive behavior, destructive flows, or machine-readable output.
 
 ## Deliverables
 
@@ -38,13 +65,9 @@ When implementing or redesigning a CLI, produce these artifacts unless the user 
 - Human output, machine output, confirmation, and exit code behavior.
 - Stdout vs stderr rules for prompts, warnings, streamed logs, and machine-readable output.
 - Error message strategy, diagnostic logging, and verbosity levels.
-- Language-specific implementation changes and tests.
-
-## Local Context
-
-This skill is distilled from:
-
-- `../raw/Best-Practices-DX-UX.md`
+- An implementation or review checklist that maps the contract to code changes or follow-up work.
+- Language-specific implementation changes and tests only when implementation is in scope. For other languages, provide framework-agnostic implementation guidance.
+- Three to five validation checks or tests.
 
 ## Pre-Implementation Extraction Checklist
 

@@ -1,0 +1,12 @@
+id,should_trigger,prompt
+t01,true,"Design a CLI for a self-hosted service with auth profiles, JSON output, and non-interactive behavior."
+t02,true,"Review this Spectre.Console.Cli app for help structure, env var precedence, and destructive confirmation rules."
+t03,true,"Refactor my Rust clap CLI so it supports --dry-run, --yes, --json, and predictable scripting behavior."
+t04,true,"Propose host/profile resolution rules for a CLI that talks to multiple Jellyfin servers."
+t05,true,"Design a task-first command tree and exit-code contract for a Forgejo CLI extension."
+t06,true,"Give framework-agnostic implementation guidance for a Python CLI that needs reserved flags, config precedence, and machine output."
+t07,false,"Write a bash one-liner to grep logs and count HTTP 500s."
+t08,false,"Show me how to use the gh CLI to create a pull request."
+t09,false,"Package my Python CLI for Homebrew and Scoop."
+t10,false,"Build a terminal dashboard in Rust with ratatui."
+t11,false,"Generate a raw OpenAPI client from this spec."
