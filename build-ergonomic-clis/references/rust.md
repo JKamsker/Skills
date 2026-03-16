@@ -207,6 +207,37 @@ Reference pattern:
 
 - `forgejo-cli-ext/src/target.rs`
 
+## Diagnostics and Logging
+
+Capture HTTP exchange details so that errors can be reported with full context.
+
+Recommended approach:
+
+- Wrap the HTTP client layer so that every request/response pair is recorded in a context struct before the result propagates to command handlers.
+- On error, write a timestamped diagnostic file to the CLI logs directory (e.g., `~/.config/tool/logs/tool-error-{timestamp}.log`) containing:
+  - The command line (secrets redacted).
+  - Resolved context: host, profile, auth source.
+  - HTTP request: method, URL, headers (auth redacted), body.
+  - HTTP response: status, headers, body (truncated to 64 KB).
+  - The full error chain (`eyre` report or `thiserror` chain).
+- Print a one-line hint to stderr: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523.log`
+
+Implementation tips:
+
+- Store the last exchange in a `DiagnosticsContext` struct passed through the app. After each HTTP call, update it before checking the response status.
+- Use `reqwest::Response::text()` with a byte limit to avoid reading unbounded response bodies into memory.
+- If the CLI uses retries, log each attempt (method, URL, status, duration) so the user can see what happened before the final failure.
+
+Verbosity control:
+
+- Default: error summary only on stderr.
+- `-v`: add resolved host, profile source, HTTP method + URL + status to stderr.
+- `-vv`: add request and response headers (auth redacted), truncated response body.
+- `-vvv`: full request body, full response body, timing.
+- The diagnostic log file always captures full detail regardless of the verbosity flag.
+
+Use the `--verbose` count from clap (`action = ArgAction::Count`) to gate output levels. All verbose output goes to stderr via `eprintln!` or a logging facade, never to stdout.
+
 ## Testing
 
 Test parsing separately from behavior.
@@ -233,3 +264,5 @@ Minimum behavior tests:
 - host/profile mismatch
 - JSON output contract
 - destructive command with and without `--yes`
+- API error produces a diagnostic log file with the HTTP exchange
+- `-v` surfaces HTTP method, URL, and status on stderr

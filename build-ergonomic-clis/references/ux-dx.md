@@ -238,6 +238,65 @@ Flag interaction rules:
 | `--quiet --yes` | Skip the confirmation prompt and execute silently. |
 | `--quiet --dry-run` | Print the preview and exit. No prompts, no mutation. |
 
+## Error Messages and Diagnostics
+
+A CLI that talks to a remote service will encounter unexpected responses. The user needs two things: a clear message explaining what went wrong, and enough diagnostic detail to report or debug the issue.
+
+### User-facing error messages
+
+Every error the user sees should answer three questions:
+
+1. **What failed?** Name the operation: "Failed to refresh library 'Movies'."
+2. **Why?** Include the HTTP status or server message: "Server returned 403 Forbidden."
+3. **What now?** Print the recovery step: "This may require admin privileges. Check your user policy."
+
+Do not dump raw stack traces, JSON blobs, or internal exception types in default output. Those belong in diagnostic logs.
+
+Rules:
+
+- Lead with the human-readable summary, not the technical detail.
+- Include the target host and relevant IDs so the user knows which server and resource was involved.
+- For auth errors (401, 403), always print the exact recovery command (`tool auth login --host <URL>`).
+- For not-found errors (404), echo back what was looked up so the user can spot typos.
+- For server errors (500+), tell the user the problem is on the server side, not a CLI bug.
+- For network errors (DNS, timeout, connection refused), name the host and suggest checking connectivity.
+- Redact secrets (tokens, passwords) in all error output.
+
+### Diagnostic logging
+
+Not every detail belongs on stderr. Capture the full HTTP exchange and internal state in a log file so the user can attach it to a bug report.
+
+Recommended approach:
+
+- On every error, write a timestamped diagnostic file containing:
+  - The full command line (with secrets redacted).
+  - Resolved host, profile, and auth source (flag, env, config).
+  - The HTTP request: method, URL, headers (auth header redacted), and body (truncated if large).
+  - The HTTP response: status code, headers, and body (truncated to a reasonable limit such as 64 KB).
+  - The full exception or error chain.
+- Store diagnostic files in a dedicated logs directory inside the CLI config directory (e.g., `~/.config/tool/logs/` or `%APPDATA%\tool\logs\`).
+- Name files with a timestamp so they do not collide: `tool-error-20260316-141523-042.log`.
+- Print a hint to stderr when a diagnostic file is written: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523-042.log`
+- Suggest including the log when reporting issues: `Include this file when reporting a bug.`
+
+### Verbosity levels
+
+Use `--verbose` to surface diagnostic detail on stderr without requiring the user to find the log file. The log file should always be detailed regardless of verbosity.
+
+| Level | What the user sees on stderr |
+|---|---|
+| Default | Error summary only: what failed, why, what now. |
+| `--verbose` (`-v`) | Above plus: resolved host/profile/auth source, HTTP method and URL, response status code. |
+| `-vv` | Above plus: request and response headers (auth redacted), response body (truncated). |
+| `-vvv` | Above plus: full request body, full response body, timing, retry attempts. |
+
+Rules:
+
+- `--verbose` output goes to stderr, never stdout. Stdout stays clean for data and `--json`.
+- `--quiet` suppresses all verbose output. It does not suppress diagnostic file writes.
+- The diagnostic log file always captures `-vvv`-level detail regardless of the verbosity flag.
+- If the CLI supports retries, log each attempt with its status so the user can see what happened before the final failure.
+
 ## Design Checklist
 
 Before implementation, pin down:
@@ -251,6 +310,7 @@ Before implementation, pin down:
 - Environment variables and precedence
 - Confirmation, `--dry-run`, and the narrow role of `--yes`
 - Exit codes
+- Error message format and diagnostic log location
 - Three to five copy-paste help examples
 
 Before shipping, validate:

@@ -36,6 +36,7 @@ When implementing or redesigning a CLI, produce these artifacts unless the user 
 - Global flags, reserved flags, environment variables, and config precedence.
 - Auth, host, profile, and fallback-host behavior.
 - Human output, machine output, confirmation, and exit code behavior.
+- Error message strategy, diagnostic logging, and verbosity levels.
 - Language-specific implementation changes and tests.
 
 ## Local Context

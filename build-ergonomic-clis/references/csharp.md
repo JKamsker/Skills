@@ -216,6 +216,47 @@ Within a feature:
 - Promote a service or helper upward only when multiple sibling features actually share it.
 - Prefer named collaborators such as `DeploymentPlanBuilder`, `ReleaseFormatter`, or `HostNormalizer` over anonymous helper buckets.
 
+## Diagnostics and Logging
+
+Capture the last HTTP exchange so that every error can be reported with full context.
+
+Recommended approach:
+
+- Create a delegating handler that records the last request and response in a scoped context object (e.g., `HttpDiagnosticsContext`).
+- On error, write a timestamped log file to the CLI logs directory containing the command line, resolved settings, the full HTTP exchange (method, URL, headers with auth redacted, request body, response status, response headers, response body truncated to 64 KB), and the exception chain.
+- Print a one-line hint to stderr: `Diagnostic log saved to %APPDATA%\tool\logs\tool-error-20260316-141523.log`
+
+Implementation sketch:
+
+```csharp
+public class HttpDiagnosticsHandler : DelegatingHandler
+{
+    private readonly HttpDiagnosticsContext _context;
+
+    public HttpDiagnosticsHandler(HttpDiagnosticsContext context)
+        => _context = context;
+
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request, CancellationToken ct)
+    {
+        _context.CaptureRequest(request);
+        var response = await base.SendAsync(request, ct);
+        await _context.CaptureResponseAsync(response);
+        return response;
+    }
+}
+```
+
+Register the handler in the HTTP client pipeline so every request is captured transparently. The `SetExceptionHandler` can then call `HttpDiagnosticsContext.WriteLogFile()` before mapping the exception to an exit code.
+
+Verbosity control:
+
+- Default: error summary only on stderr.
+- `--verbose`: add resolved host, profile source, HTTP method + URL + status to stderr.
+- Higher verbosity or the log file: full headers and bodies.
+
+Use `IAnsiConsole.WriteException()` only in `--verbose` mode or higher. In default mode, print the human-readable summary and point to the log file.
+
 ## Testing
 
 Cover both parsing and behavior.
@@ -234,6 +275,8 @@ Minimum test matrix:
 - non-interactive secret input path
 - branch help output
 - one success path with `--json`
+- API error produces a diagnostic log file with the HTTP exchange
+- `--verbose` surfaces HTTP method, URL, and status on stderr
 
 ## Implementation Checklist
 
@@ -244,4 +287,5 @@ Minimum test matrix:
 - Add one branch end to end
 - Add shared output, preview, and confirmation helpers
 - Add exit code mapping
+- Add HTTP diagnostics handler and log file writer
 - Add parser and command tests
