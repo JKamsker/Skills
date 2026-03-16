@@ -152,14 +152,17 @@ pub fn normalize_base_url(raw: &str) -> Result<String, CliError> {
 
     let candidate = if trimmed.contains("://") {
         trimmed.to_string()
+    } else if trimmed.contains(':') && trimmed.parse::<std::net::Ipv6Addr>().is_ok() {
+        format!("https://[{trimmed}]")
     } else {
         format!("https://{trimmed}")
     };
 
-    let url = Url::parse(&candidate).map_err(|err| CliError(format!("invalid host: {err}")))?;
+    let url = Url::parse(&candidate)
+        .map_err(|err| CliError(format!("invalid host '{raw}': {err}")))?;
     let host = url
         .host_str()
-        .ok_or_else(|| CliError("url is missing host".to_string()))?;
+        .ok_or_else(|| CliError(format!("invalid host '{raw}': missing hostname")))?;
 
     let scheme = url.scheme().to_ascii_lowercase();
     let default_port = match scheme.as_str() {
@@ -179,8 +182,11 @@ pub fn normalize_base_url(raw: &str) -> Result<String, CliError> {
 
 pub fn hostname_identity_key(raw: &str) -> Result<String, CliError> {
     let base = normalize_base_url(raw)?;
-    let url = Url::parse(&base).map_err(|err| CliError(format!("invalid host: {err}")))?;
-    let host = url.host_str().unwrap_or_default();
+    let url = Url::parse(&base)
+        .map_err(|err| CliError(format!("invalid base url '{base}': {err}")))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| CliError(format!("invalid base url '{base}': missing hostname")))?;
     Ok(host.to_ascii_lowercase())
 }
 
@@ -260,7 +266,7 @@ fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, Option<Strin
     let url = parse_remote_url(raw)?;
     let host = url
         .host_str()
-        .ok_or_else(|| CliError("remote url missing host".to_string()))?;
+        .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}': missing hostname")))?;
 
     let host_hint = match url.scheme() {
         "http" | "https" => {
@@ -276,7 +282,7 @@ fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, Option<Strin
 
     let mut segments = url
         .path_segments()
-        .ok_or_else(|| CliError("remote url cannot be a base".to_string()))?
+        .ok_or_else(|| CliError(format!("unable to parse remote url '{raw}': cannot be a base url")))?
         .filter(|segment| !segment.is_empty())
         .collect::<Vec<_>>();
 
@@ -337,7 +343,7 @@ fn parse_remote_url(raw: &str) -> Result<Url, CliError> {
 fn split_scp_host_and_path(raw: &str) -> Result<(&str, &str), CliError> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err(CliError("remote url is empty".to_string()));
+        return Err(CliError(format!("unable to parse remote url '{raw}': empty")));
     }
 
     let sep_index = if trimmed.starts_with('[') {

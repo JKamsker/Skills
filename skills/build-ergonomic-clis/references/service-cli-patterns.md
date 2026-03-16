@@ -298,7 +298,7 @@ Non-HTTP example:
 
 - Do not store plaintext secrets in general config stores unless explicitly chosen and documented.
 - Do not log raw `Authorization`, cookies, tokens, or token-bearing CLI args in diagnostics.
-- Do not prompt unless stdin and stderr are attached to a terminal; `--quiet` is not a sufficient guard.
+- Do not prompt unless stdin and stderr are attached to a terminal *and* the CLI is in a human output mode. Machine output modes never prompt; `--quiet` is not a sufficient guard.
 - Do not silently pick the first matching profile when multiple profiles match a target; require `--profile` or a default mapping.
 
 ## Service CLI Design Checklist Additions

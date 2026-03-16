@@ -306,12 +306,13 @@ pub fn normalize_base_url_input(raw: &str) -> Result<String, CliError> {
         format!("https://{trimmed}")
     };
 
-    let url = Url::parse(&normalized).map_err(|err| CliError::usage(format!("invalid target url: {err}")))?;
+    let url = Url::parse(&normalized)
+        .map_err(|err| CliError::usage(format!("invalid target url '{raw}': {err}")))?;
 
     let scheme = url.scheme().to_ascii_lowercase();
     let host = url
         .host_str()
-        .ok_or_else(|| CliError::usage(format!("invalid target url: missing hostname in '{raw}'")))?;
+        .ok_or_else(|| CliError::usage(format!("invalid target url '{raw}': missing hostname")))?;
 
     let default_port = match scheme.as_str() {
         "http" => Some(80),
@@ -353,7 +354,7 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
             && trimmed.as_bytes()[1] == b':'
             && (trimmed.as_bytes()[2] == b'\\' || trimmed.as_bytes()[2] == b'/'));
     if looks_like_windows_path {
-        return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+        return Err(CliError::usage(format!("invalid hostname '{raw}'")));
     }
 
     let looks_like_url = trimmed.contains("://")
@@ -370,19 +371,19 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
 
         match Url::parse(&candidate) {
             Ok(url) => {
-                let host = url.host_str().ok_or_else(|| {
-                    CliError::usage(format!("invalid hostname: missing hostname in '{raw}'"))
-                })?;
+                let host = url
+                    .host_str()
+                    .ok_or_else(|| CliError::usage(format!("invalid hostname '{raw}': missing hostname")))?;
                 return Ok(host.trim_matches(&['[', ']'][..]).to_ascii_lowercase());
             }
             Err(_) => {
                 if trimmed.contains("://") {
-                    return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                    return Err(CliError::usage(format!("invalid hostname '{raw}'")));
                 }
 
                 if trimmed.contains(':') && !trimmed.contains('/') && !trimmed.contains('@') {
                     // Looks like a host:port input, but did not parse as a URL (likely invalid port).
-                    return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                    return Err(CliError::usage(format!("invalid hostname '{raw}'")));
                 }
 
                 let without_scheme = trimmed.splitn(2, "://").nth(1).unwrap_or(trimmed);
@@ -396,7 +397,7 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
                 let host = if authority.starts_with('[') {
                     let end = authority
                         .find(']')
-                        .ok_or_else(|| CliError::usage(format!("invalid hostname: '{raw}'")))?;
+                        .ok_or_else(|| CliError::usage(format!("invalid hostname '{raw}'")))?;
                     authority[1..end].trim()
                 } else {
                     // If the input looks like scheme-less host:port[/...] but URL parsing failed above,
@@ -409,13 +410,13 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
                         None => false,
                     };
                     if looks_like_host_port {
-                        return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                        return Err(CliError::usage(format!("invalid hostname '{raw}'")));
                     }
                     authority.split_once(':').map(|(h, _)| h.trim()).unwrap_or(authority)
                 };
 
                 if host.is_empty() {
-                    return Err(CliError::usage(format!("invalid hostname: '{raw}'")));
+                    return Err(CliError::usage(format!("invalid hostname '{raw}'")));
                 }
 
                 return Ok(host.to_ascii_lowercase());
@@ -427,10 +428,11 @@ pub fn normalize_hostname(raw: &str) -> Result<String, CliError> {
 }
 
 pub fn target_identity_hostname_key(normalized_base_url: &str) -> Result<String, CliError> {
-    let url = Url::parse(normalized_base_url).map_err(|err| CliError::usage(format!("invalid base url: {err}")))?;
+    let url = Url::parse(normalized_base_url)
+        .map_err(|err| CliError::usage(format!("invalid base url '{normalized_base_url}': {err}")))?;
     let host = url
         .host_str()
-        .ok_or_else(|| CliError::usage(format!("invalid base url: missing hostname in '{normalized_base_url}'")))?;
+        .ok_or_else(|| CliError::usage(format!("invalid base url '{normalized_base_url}': missing hostname")))?;
     Ok(host.to_ascii_lowercase())
 }
 

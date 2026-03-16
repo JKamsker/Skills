@@ -94,10 +94,12 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (OperationCanceledException ex)
         {
-            // Heuristic: treat task cancellation without an external cancellation token as a timeout.
+            // Heuristic: treat task cancellation that looks like an HTTP timeout as a timeout/network failure.
             // In a real implementation, plumb an explicit CancellationToken to reliably distinguish
             // user cancellation from timeouts.
-            if (ex is TaskCanceledException taskCancelled && taskCancelled.CancellationToken == default)
+            if (ex is TaskCanceledException taskCancelled
+                && (taskCancelled.InnerException is TimeoutException
+                    || taskCancelled.Message.Contains("timed out", StringComparison.OrdinalIgnoreCase)))
             {
                 var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
                 RenderNetworkError(new HttpRequestException("Request timed out.", ex), logPath, resolved.OutputMode);

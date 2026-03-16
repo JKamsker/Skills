@@ -254,7 +254,7 @@ Flag interaction rules:
 
 | Flags passed | Behavior |
 |---|---|
-| (none) | Prompt for confirmation if the command is destructive. |
+| (none) | Human mode: prompt for confirmation if the command is destructive (TTY-only). Machine output modes: never prompt; refuse (exit `2`) unless `--yes` or `--dry-run` is present. |
 | `--dry-run` | Print a preview of the operation and exit. Never prompt, never mutate. |
 | `--yes` | Skip the confirmation prompt and execute. |
 | `--dry-run --yes` | `--dry-run` wins. Print the preview and exit without mutating. |
