@@ -1,6 +1,7 @@
 ---
 name: build-ergonomic-clis
-description: Design, review, refactor, or implement product-grade command-line interfaces with task-first command trees, help, auth and configuration UX, host and profile resolution, env/config precedence, machine-readable output, confirmation rules, and predictable non-interactive behavior. Use for service CLIs, CLI extensions, and CLI UX/DX work, especially C#/.NET Spectre.Console.Cli and Rust clap apps. Do not use for shell one-liners, operating an existing third-party CLI, TUI apps, packaging or distribution tasks, or generic OpenAPI client generation. Output a command tree, precedence model, auth/profile contract, output and exit-code rules, and an implementation or review checklist.
+description: Designs, reviews, and implements product-grade command-line interfaces. Covers command tree structure, flag conventions, auth and profile UX, config precedence, machine-readable output, confirmation and dry-run rules, exit codes, and non-interactive behavior. Use when designing a CLI, reviewing CLI UX/DX, planning command structure, adding argument parsing, or implementing a service CLI. Supports C#/.NET Spectre.Console.Cli and Rust clap.
+argument-hint: "[design|review|implement] <description>"
 ---
 
 # Build Ergonomic CLIs
@@ -47,12 +48,12 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 
 ## Definition of Done
 
-- A top-level command tree exists and the grouping is justified in user-facing terms.
-- Global flags, reserved flags, environment variables, and config/default precedence are explicit.
-- Auth, host, profile, credential-storage, and fallback-host behavior are defined.
-- Human output, machine output, stdout vs stderr rules, confirmation rules, and exit codes are defined.
-- Language-specific implementation notes appear only when implementation is in scope. For other languages, provide framework-agnostic guidance.
-- Three to five validation checks or tests cover help, target resolution, non-interactive behavior, destructive flows, or machine-readable output.
+- Produce a top-level command tree and justify the grouping in user-facing terms.
+- Make global flags, reserved flags, environment variables, and config/default precedence explicit.
+- Define auth, host, profile, credential-storage, and fallback-host behavior.
+- Define human output, machine output, stdout vs stderr rules, confirmation rules, and exit codes.
+- Include language-specific implementation notes only when implementation is in scope. For other languages, provide framework-agnostic guidance.
+- Include three to five validation checks or tests covering help, target resolution, non-interactive behavior, destructive flows, or machine-readable output.
 
 ## Deliverables
 
