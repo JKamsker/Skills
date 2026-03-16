@@ -2,14 +2,21 @@
 
 ## Stack
 
-For ergonomic Rust CLIs, prefer this baseline:
+### Generic / local baseline
+
+For ergonomic Rust CLIs (including local-only tools), prefer this baseline:
 
 - `clap` derive API for parsing and help (enable the `env` feature for `#[arg(env = "...")]` support)
 - `serde` and `serde_json` for machine output
-- `reqwest` for HTTP (async by default; pair with `tokio` as the async runtime)
-- `tokio` with `#[tokio::main]` for async entry point; use `reqwest::blocking` only if the CLI is entirely synchronous
 - `thiserror` or `eyre` for error layering
 - `clap_complete` if shell completions matter
+
+### Service add-on (HTTP/remote)
+
+Only if the CLI actually talks to a remote service:
+
+- `reqwest` for HTTP (async by default; pair with `tokio` as the async runtime)
+- `tokio` with `#[tokio::main]` for async entry point; use `reqwest::blocking` only if the CLI is entirely synchronous
 
 The local references split into two good patterns:
 
@@ -20,7 +27,7 @@ The local references split into two good patterns:
 
 Prefer the small examples in this skill before copying repository code directly:
 
-- [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs): shared host/profile/token resolution with canonical host keys and explicit ambiguity handling.
+- [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs): hostname-key target identity + base URL split, profile resolution, and secret-store lookup (Jellyfin variant).
 - [../assets/examples/rust/clap/target_resolution.rs](../assets/examples/rust/clap/target_resolution.rs): layered `--host` / `--repo` / `--remote` / env fallback target inference inspired by `fj-ex`.
 - [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs): machine-vs-human output, `--dry-run`, `--yes`, TTY-aware prompts, raw bytes, and exit categories.
 
@@ -121,6 +128,15 @@ For self-hosted service CLIs:
 Reference pattern:
 
 - `ztnet-cli/src/context.rs`
+
+## Local Project Discovery and Process Execution
+
+Local-only and hybrid CLIs often need discovery + passthrough behavior. Make it explicit:
+
+- Discovery: walk parent directories up to a documented stop condition (filesystem root, VCS root, marker file).
+- Overrides: provide explicit flags (`--file`, `--project`, `--manifest`, `--cwd`) that bypass discovery.
+- Diagnostics: surface the resolved path in `--dry-run` / `-v`.
+- Child processes: when acting as a wrapper (build/test/lint), default to stdio passthrough unless the user opted into capture/output formatting.
 
 ## Auth Flows
 

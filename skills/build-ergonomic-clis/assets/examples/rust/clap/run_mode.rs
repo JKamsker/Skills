@@ -67,7 +67,8 @@ pub fn confirm_or_abort(
 
     if mode.quiet || !io::stdin().is_terminal() || !io::stderr().is_terminal() {
         return Err(CliError {
-            exit: ExitCategory::Cancelled,
+            // Interaction-required refusal (quiet / non-TTY) is exit 2, not exit 10.
+            exit: ExitCategory::Usage,
             message: "confirmation required. Re-run with --yes or --dry-run.".to_string(),
         });
     }
@@ -82,6 +83,7 @@ pub fn confirm_or_abort(
     Ok(if matches!(answer.as_str(), "y" | "yes") {
         GuardDecision::Continue
     } else {
+        // Caller should map this explicit cancellation to exit 10.
         GuardDecision::Cancelled
     })
 }

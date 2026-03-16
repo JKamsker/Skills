@@ -61,6 +61,8 @@ Rules:
 - Mark privileged or dangerous commands directly in help.
 - Keep examples realistic and copy-pasteable.
 - If a command branch is mostly for experts, keep it discoverable but visually secondary.
+- `--help` prints to stdout and exits `0`.
+- `--version` prints to stdout and exits `0`.
 
 ## Reserved Surface Area
 
@@ -96,7 +98,7 @@ Rules:
 
 For service CLIs that need host, token, or profile env vars, see [service-cli-patterns.md](service-cli-patterns.md).
 
-## Stdin and Interactivity
+## TTY and Non-Interactive Rules
 
 Default rule: do not block stdin unless the user explicitly asked for it or the command is clearly interactive.
 
@@ -114,7 +116,8 @@ Bad patterns:
 
 Rules:
 
-- If a prompt is required and the tool is in `--quiet` mode, fail and tell the user to pass the missing flag, use `--dry-run` to inspect first, or use `--yes` only when bypassing a destructive confirmation is intentional.
+- Machine output modes (`--json`, `--output json`, porcelain modes) are non-interactive: no prompts, no browser launches, no banners.
+- If a prompt is required and the tool is in `--quiet` mode, fail (exit `2`) and tell the user to pass the missing flag, use `--dry-run` to inspect first, or use `--yes` only when bypassing a destructive confirmation is intentional.
 - If a command supports interactive prompts, only do so when stdin and stderr are TTYs.
 - Prompt on stderr, not stdout.
 - Secret prompts must not echo.
@@ -130,6 +133,44 @@ Avoid behavior that makes the CLI feel clever but unpredictable.
 
 The local cautionary example is the "latest run" style workflow where a convenience flag exists. The convenience flag is fine. Implicitly treating a missing run identifier as "latest" is not.
 
+## Automation Contract
+
+Treat automation as a first-class use case. A good CLI must have an explicit machine-facing contract.
+
+### Machine output styles
+
+Support one (or both) of these styles, but the design must say which applies:
+
+- **Envelope contract** (recommended default for administrative/service/stateful CLIs)
+  - A stable wrapper with `ok` + `data` + `error` + `meta`.
+  - Good when recovery guidance and uniform parsing matter.
+- **Direct-value contract** (allowed for filter/pipeline/data-transform commands)
+  - Bare object/array/scalar, JSONL streams, or value-only output.
+  - Good when the command behaves like a filter and wrappers add friction.
+
+### Contract versioning (mandatory)
+
+Machine contracts must be versioned:
+
+- In-band: `meta.schemaVersion = 1`
+- Selector: `--porcelain=v1`, `--format-version 1`, `--output json-v1`
+
+Human output can evolve more freely. Machine output must have an explicit stability boundary.
+
+### Stdout vs stderr routing
+
+The design must state its routing rule and keep it consistent.
+
+Recommended defaults:
+
+- **Envelope-style commands**: success and expected structured failures on stdout; stderr reserved for pre-contract or infrastructural failures.
+- **Direct-value/pipeline commands**: value output on stdout; errors on stderr.
+
+Regardless of style:
+
+- Do not print banners, prompts, or warnings to stdout when machine mode is enabled.
+- Redact secrets in all output (including errors and diagnostics).
+
 ## Output and Exit Codes
 
 Treat human and machine output as separate contracts.
@@ -141,18 +182,21 @@ Treat human and machine output as separate contracts.
 - Redact secrets in human output and config dumps.
 - Use explicit exit codes for common failure classes.
 
-Suggested exit code set:
+### Base exit codes (all CLI classes)
 
 - `0`: success
 - `1`: general or unclassified error (catch-all for failures that do not fit a specific category)
-- `2`: usage or validation error
-- `3`: not authenticated
-- `4`: authorization failed
+- `2`: usage / validation / interaction-required / non-interactive refusal
 - `5`: not found
 - `6`: conflict
-- `7`: rate limited
-- `8`: network or timeout
-- `10`: cancelled
+- `10`: explicit user cancellation / abort / SIGINT-equivalent
+
+### Service extension exit codes (service-like CLIs only)
+
+- `3`: not authenticated
+- `4`: authenticated but not authorized
+- `7`: rate limited / backpressure / quota refusal
+- `8`: transport / connection / TLS / timeout / protocol-unreachable failure
 
 ## Confirmation and Dangerous Operations
 
@@ -171,9 +215,53 @@ Flag interaction rules:
 | `--dry-run` | Print a preview of the operation and exit. Never prompt, never mutate. |
 | `--yes` | Skip the confirmation prompt and execute. |
 | `--dry-run --yes` | `--dry-run` wins. Print the preview and exit without mutating. |
-| `--quiet` | If confirmation would be required, fail with an error telling the user to pass `--yes` or `--dry-run`. Never prompt. |
+| `--quiet` | If confirmation would be required, fail (exit `2`) with an error telling the user to pass `--yes` or `--dry-run`. Never prompt. |
 | `--quiet --yes` | Skip the confirmation prompt and execute silently. |
 | `--quiet --dry-run` | Print the preview and exit. No prompts, no mutation. |
+
+When a prompt is shown and the user declines, treat it as explicit cancellation (exit `10`).
+
+## Quiet Mode (`--quiet`)
+
+Define `--quiet` precisely:
+
+- Suppresses non-essential human-facing output.
+- Suppresses prompts (never blocks waiting for interaction).
+- Never suppresses machine stdout.
+- Never changes success/failure semantics or exit codes.
+- May still write diagnostic artifacts according to policy.
+
+## Dry-Run Semantics (`--dry-run`)
+
+Define `--dry-run` as a guarantee:
+
+- Never mutates state.
+- Explains what would happen (the plan), including the resolved target and key parameters.
+- Local reads are allowed.
+- Remote reads are allowed only if the command explicitly documents live planning/validation.
+- Never silently performs side effects.
+
+## Binary and Stream Output
+
+For commands that emit files or binary payloads (images, archives, logs, downloads), define one of these patterns:
+
+- Reject machine output with a clear validation error (exit `2`), or
+- Provide metadata-only machine output while writing bytes to a file/path (or to stdout only when explicitly requested and safe).
+
+For stream/follow/watch commands, document:
+
+- whether the output is line-oriented (JSONL) or human-oriented
+- how `--json`/porcelain interacts with streaming
+- whether progress indicators are disabled automatically in non-TTY contexts
+
+## Local Project Discovery
+
+Local-only and hybrid CLIs often need project/workspace discovery. If the CLI walks parent directories, make the rules explicit:
+
+- Stop conditions (filesystem root, marker file, VCS root, explicit `--root`).
+- Explicit override flags (`--file`, `--manifest`, `--project`, `--cwd`).
+- Which resolved path is used, and where it is surfaced (diagnostics, `--dry-run`, `--verbose`).
+- Child-process IO passthrough rules for wrappers around build tools (stdin/stdout/stderr).
 
 ## Error Messages and Diagnostics
 
@@ -197,7 +285,7 @@ Rules:
 - For permission errors, tell the user which permission is needed and how to grant it.
 - Redact secrets (tokens, passwords) in all error output.
 
-For HTTP-specific error handling rules (401/403/500 recovery, network errors), see [service-cli-patterns.md](service-cli-patterns.md).
+For protocol/service-specific error handling rules (auth recovery, transport errors, server failures), see [service-cli-patterns.md](service-cli-patterns.md).
 
 ### Diagnostic logging
 
@@ -214,7 +302,7 @@ Recommended approach:
 - Print a hint to stderr when a diagnostic file is written: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523-042.log`
 - Suggest including the log when reporting issues: `Include this file when reporting a bug.`
 
-For HTTP-specific diagnostic logging (request/response capture, auth header redaction), see [service-cli-patterns.md](service-cli-patterns.md).
+For protocol/service-specific diagnostic logging (exchange capture, auth header redaction), see [service-cli-patterns.md](service-cli-patterns.md).
 
 ### Verbosity levels
 

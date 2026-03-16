@@ -18,11 +18,21 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 
 ### Design
 
-- Start with [references/cli-patterns.md](references/cli-patterns.md).
-- If the CLI connects to a remote service or API, also read [references/service-cli-patterns.md](references/service-cli-patterns.md) for auth, host/profile resolution, and HTTP diagnostics.
-- Define the command tree, help contract, env/config precedence, reserved flags, confirmation rules, machine output, and non-interactive behavior before talking about code structure.
-- Use [assets/design/jf-cli-design.md](assets/design/jf-cli-design.md) only when a worked self-hosted-service example would help benchmark the design after the first pass.
-- For the detailed host-keyed profile system specification (hostname resolution, aliases, migration, validation), see [assets/design/jf-cli-profile-system.md](assets/design/jf-cli-profile-system.md). Load this only when the design involves multi-server profile management.
+- First classify the CLI (required):
+  - **Local-only**: operates on local files/processes/project state only.
+  - **Hybrid**: local-first, but some commands optionally connect to remotes.
+  - **Service-native**: primarily interacts with one remote service/API surface.
+  - **Multi-surface service**: multiple independent target/auth surfaces (contexts, daemons + registries, certs + accounts, etc.).
+- Always start with [references/cli-patterns.md](references/cli-patterns.md) (generic CLI + automation contract).
+- Then load service guidance based on the classification:
+  - **Local-only**: `cli-patterns.md` only.
+  - **Hybrid**: `cli-patterns.md` + only the relevant sections of [references/service-cli-patterns.md](references/service-cli-patterns.md) for the remote-facing branches.
+  - **Service-native**: read [references/service-cli-patterns.md](references/service-cli-patterns.md) fully.
+  - **Multi-surface service**: read [references/service-cli-patterns.md](references/service-cli-patterns.md) fully and explicitly apply the multiple-auth/context guidance.
+- Define the command tree, help contract, env/config precedence, target/auth/context resolution, automation contract, confirmation rules, machine output, and non-interactive behavior before talking about code structure.
+- Generic references are the source of truth. Worked examples are illustrative; if an example conflicts with a reference, the reference wins.
+- Use [assets/design/jf-cli-design.md](assets/design/jf-cli-design.md) only as a worked benchmark after the first design pass.
+- For the detailed target/profile system asset, load [assets/design/jf-cli-profile-system.md](assets/design/jf-cli-profile-system.md) when the CLI needs **saved remote targets and identities** (profiles/contexts/accounts), defaults or aliases for target selection, and switching behavior — not merely “more than one server”.
 
 ### Review
 
@@ -68,14 +78,15 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 
 When implementing or redesigning a CLI, produce these artifacts unless the user asks for less:
 
+- CLI classification (local-only / hybrid / service-native / multi-surface service).
 - A top-level command tree and a short explanation of the grouping.
-- Global flags, reserved flags, environment variables, and config precedence.
-- Exact environment variable names and whether they mirror a flag or a legacy behavior.
-- Human output, machine output, confirmation, and exit code behavior.
-- Stdout vs stderr rules for prompts, warnings, streamed logs, and machine-readable output.
+- Target/auth/context resolution and precedence (flags → env → config/profile/context → defaults).
+- Automation contract (machine output style + versioning + stdout/stderr rules).
+- TTY / non-interactive behavior (stdin, prompts, `--quiet`, `--yes`, `--dry-run`).
+- Destructive action and confirmation rules.
+- Output modes and exit codes.
 - Error message strategy, diagnostic logging, and verbosity levels.
-- An implementation or review checklist that maps the contract to code changes or follow-up work.
-- Language-specific implementation changes and tests only when implementation is in scope. For other languages, provide framework-agnostic implementation guidance.
+- Implementation notes only when implementation is in scope; otherwise keep it framework-agnostic.
 - Three to five validation checks or tests.
 
 #### Additional deliverables for service CLIs

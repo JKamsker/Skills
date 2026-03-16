@@ -1,6 +1,6 @@
 # Service CLI Patterns
 
-Supplementary patterns for CLIs that connect to remote services or APIs. Read [cli-patterns.md](cli-patterns.md) first.
+Supplementary patterns for CLIs that connect to remote services or APIs. Read [cli-patterns.md](cli-patterns.md) first — especially the automation contract and the non-interactive rules.
 
 ## Auth Design
 
@@ -13,160 +13,296 @@ Keep authentication explicit and contained.
   - Avoid: running `tool deploy` and silently opening a login prompt
 - Fail fast on missing auth for protected commands and print the exact recovery command.
   - Example: `Authentication required. Run 'tool auth login'.`
-- Separate user auth from service auth when they differ.
-  - Example: UI session cookie vs API token
-- If the tool supports secrets from stdin, make that opt-in.
-  - `--stdin`
-  - `--password-stdin`
+- If the tool supports secrets from stdin, make that opt-in and named.
+  - `--stdin`, `--password-stdin`, `--token-stdin`
 
 For browser-capable service CLIs:
 
-- Prefer system browser plus PKCE or a service-native device or quick-connect flow.
+- Prefer system browser plus PKCE or a service-native device/quick-connect flow.
 - Fall back to pasted tokens only when the service actually uses them.
 
 For API-token-based CLIs:
 
-- Support `auth set-token TOKEN`
-- Also support `auth set-token --stdin`
-- Validate tokens by default unless the user passed `--no-validate`
+- Support `auth set-token TOKEN` and `auth set-token --stdin`.
+- Validate tokens by default unless the user passed `--no-validate`.
 
-## Self-Hosted Services: Host, Profiles, and Fallbacks
+## Targets, Profiles/Contexts, Defaults
 
-Self-hosted service CLIs need an explicit target model.
+Service-like CLIs need an explicit target model. Recommended model:
 
-Recommended model:
+- A **profile/context** stores non-secret defaults (timeouts, output mode, default scope) plus target binding metadata.
+- **Credentials are bound to a derived target identity key** (not just a profile name).
+- The active profile/context is one input to resolution, not magic global state.
 
-- A profile stores non-secret defaults plus host binding.
-- Credentials are bound to the canonical host key, not just a profile name.
-- The active profile is only one input to target resolution, not magic global state.
-
-Useful commands:
+Useful commands (names may differ; define your vocabulary):
 
 ```text
 tool auth profiles list
 tool auth profiles use <name>
-tool auth hosts list
-tool auth hosts set-default <host> <profile>
+tool auth targets list
+tool auth targets set-default <target> <profile>
 tool config path
 tool config get
 tool config set
 ```
 
-Resolution rules should be documented and enforced:
+## Target Identity Modes (design choice)
 
-1. CLI flags
-2. Environment variables
-3. Config file or selected profile
-4. Hardcoded defaults
+There is no single universal “canonical host key”. Service-like CLIs must choose a target identity mode and document:
 
-If the host flag is set without `--profile`, pick a profile using a host-default mapping or a single matching profile. If multiple profiles match, require the user to choose instead of guessing. The flag name should reflect whether the value is always a hostname (`--host`) or can also be a full URL (`--server`).
+- which mode is chosen
+- why it is correct for the tool
+- normalization rules
+- aliases and migration behavior
 
-If repo or directory inference exists, document it as a lower-priority fallback, not the primary contract.
+### A) Hostname key
 
-Good examples from the local references:
+Examples: `jf.example.com`, `nas.local`, `192.168.1.50`
 
-- The [Jellyfin CLI profile system](../assets/design/jf-cli-profile-system.md) binds host defaults to profiles and only reuses stored auth when the profile host matches the target host. It is the worked example for the patterns below.
-- Another local reference can infer host and repo from git remotes or an environment fallback, but that behavior stays visible in docs and errors.
+Use when credentials should follow the logical host regardless of scheme/port/path.
 
-### Hostname Normalization and Canonical Keys
+Normalization notes (typical):
 
-Lowercase hostnames before using them as config keys. Strip port and path from the key; store those in `baseUrl`. Two URLs that share a hostname resolve to the same host entry; URL differences become per-profile overrides. Example: `https://myserver.com` and `https://myserver.com:8096/path` both key on `myserver.com`.
+- trim
+- accept either hostname or URL input, extract hostname
+- lowercase hostname before using it as a key
+- ports/paths belong in the effective base URL, not the identity key
 
-### Optional Hostname Aliases
+Risks:
 
-Allow each host to declare short aliases (e.g. `home`, `nas`). Resolution order: exact host key match first, alias scan second. If multiple hosts share an alias:
+- multiple deployments on different ports/paths share identity unless you model them as separate logical hosts.
 
-- Use the first match (config file order) and emit a warning.
-- The tie-break is deterministic so scripts behave predictably.
+### B) Origin key
 
-If an alias is identical to an existing host key, the host key always wins — the alias is effectively shadowed. Warn when this situation is created.
+Examples: `https://jf.example.com`, `https://jf.example.com:8443`
 
-### Single-Entry Inference
+Use when scheme/port boundaries are security or tenancy boundaries.
 
-One host configured? Use it. One profile on a host? Use it. This gives zero-config behavior for the common single-server, single-account case without adding hidden global state.
+Normalization notes (typical):
 
-### Validation on Load and Write
+- normalize scheme casing
+- lowercase hostname
+- include non-default ports
+- drop path/query/fragment
 
-Validate referential integrity on every config load: default pointers exist, every host has at least one profile, credential fields are consistent. Never write a config that violates these rules; cascade cleanup instead (e.g. deleting the last profile also deletes the host entry).
+Risks:
 
-### Migration from Legacy Formats
+- “same host, different port” becomes distinct identities (which may be intended).
 
-If the old-format config exists and the new format does not, migrate silently on first run. Back up the old file (`.bak`). Print a one-line notice to stderr. The backup is never read again.
+### C) Full base-URL key
+
+Examples: `https://api.example.com/team-a`, `https://api.example.com/root/admin`
+
+Use when path-scoped tenancy makes path part of identity.
+
+Normalization notes (typical):
+
+- normalize scheme + hostname casing
+- normalize path rules (trailing slash, dot-segments)
+- document whether query params ever participate (usually: no)
+
+Risks:
+
+- small URL differences can create surprising identity fragmentation unless normalization is strict.
+
+## Resolution Algorithm (template)
+
+Every service-like CLI should present a one-page resolution sequence. A good template:
+
+1. Read **explicit flags** (target + profile/context + auth overrides).
+2. Read **environment variables** (mirroring flags).
+3. Resolve **explicit profile/context/account selection** (if provided).
+4. Apply **defaults** (global default, per-target default, single-entry inference).
+5. Apply **alias rewrites** (if supported) and emit warnings on ambiguity.
+6. Derive the **target identity key** (per the chosen mode).
+7. Look up **credentials** using the identity key (and the selected profile/context if applicable).
+8. Produce the final **effective target** used for network operations (base URL, timeouts, retries).
+
+Rules:
+
+- If multiple profiles match and there is no default mapping, require an explicit selection instead of guessing.
+- If repo/directory inference exists, document it as a lower-priority fallback, not the primary contract.
+- In machine output modes, never prompt; return an actionable error (exit `2`).
+
+## Aliases, Inference, Validation, Migration
+
+### Optional aliases
+
+If you support aliases (e.g. `home`, `prod`), define:
+
+- resolution order (exact target key match first, alias scan second)
+- ambiguity behavior (deterministic tie-break + warning, or hard error — choose one and document it)
+- shadowing behavior (if alias equals a real target key, target key wins; warn when created)
+
+### Single-entry inference
+
+One target configured? Use it. One profile on a target? Use it. This yields zero-config behavior for the common single-server, single-account case without hidden global state.
+
+### Validation on load and write
+
+Validate referential integrity on every config load and never write invalid config. Cascade cleanup on delete operations (e.g. deleting the last profile can delete the target entry).
+
+### One-time migration
+
+If the old-format config exists and the new format does not:
+
+- perform an automatic one-time migration on first run
+- back up the old file (`.bak`)
+- emit a brief stderr note in human mode
+- avoid noisy output in machine modes
+
+## Config Store vs Secret Store (recommended)
+
+Do not store plaintext secrets in the general config by default. Prefer:
+
+- OS credential store / external helper / keyring integration, or
+- a separate credential file with clearly documented permissions and redaction rules
+
+### Example: redacted general config (non-secret)
+
+```jsonc
+{
+  "defaultTarget": "jf.home.example.com",
+  "targets": {
+    "jf.home.example.com": {
+      "baseUrl": "https://jf.home.example.com",
+      "aliases": ["home", "jf"],
+      "defaultProfile": "main",
+      "profiles": {
+        "main": {
+          "user": "jonas",
+          "output": "table"
+        },
+        "admin": {
+          "user": "admin",
+          "output": "json"
+        }
+      }
+    }
+  }
+}
+```
+
+### Example: secret binding (conceptual)
+
+Key the secret store by:
+
+- target identity key (per the chosen mode)
+- profile/context name (if relevant)
+- credential kind (token, api key, cookie)
+
+Example key names:
+
+- `tool:cred:{targetKey}:{profile}:token`
+- `tool:cred:{targetKey}:{profile}:apiKey`
+
+If a tool chooses inline secret storage anyway, it must:
+
+- label it explicitly as a tradeoff
+- document file permissions expectations
+- ensure all diagnostics and config dumps redact secrets
 
 ## Environment Variable Naming for Services
 
-Service CLIs should use predictable env var names for host, token, and profile:
+Prefer predictable env vars that mirror flags:
 
-- `TOOL_HOST`
-- `TOOL_TOKEN`
+- `TOOL_HOST` / `TOOL_TARGET`
 - `TOOL_PROFILE`
+- `TOOL_TOKEN` / `TOOL_API_KEY`
 
-These map to `--host`/`--server`, `--token`, and `--profile` flags respectively. Document precedence: flags override env vars override config file.
+Document precedence: flags override env vars override config/profile defaults.
 
-## HTTP-Specific Error Handling
+## Multiple Auth Surfaces
 
-Service CLIs that talk to HTTP APIs should follow these additional error message rules:
+Some tools have more than one auth surface. Examples:
 
-- Include the target host and relevant IDs so the user knows which server and resource was involved.
-- For auth errors (401, 403), always print the exact recovery command (`tool auth login --host <URL>`).
-- For not-found errors (404), echo back what was looked up so the user can spot typos.
-- For server errors (500+), tell the user the problem is on the server side, not a CLI bug.
-- For network errors (DNS, timeout, connection refused), name the host and suggest checking connectivity.
+- daemon transport auth vs registry auth
+- TLS client certificates vs account tokens
+- connection-string (DSN) auth vs saved profiles
 
-Example error messages:
+Rules:
 
-- "Failed to refresh library 'Movies'. Server returned 403 Forbidden. This may require admin privileges. Check your user policy."
-- "Server returned 500 Internal Server Error. This is a server-side problem, not a CLI bug. Try again or check the server logs."
+- Name each auth surface explicitly (flags, env vars, config sections).
+- Do not overload a single `--token` to mean different things depending on subcommand.
+- Define how auth surfaces interact with contexts/profiles and defaults.
 
-## HTTP Diagnostic Logging
+## Context / Profile / Account Vocabulary
 
-In addition to the generic diagnostic logging in [cli-patterns.md](cli-patterns.md), service CLIs should capture HTTP exchange details:
+Ecosystems use different names. The design must define:
 
-- On every error, include in the diagnostic file:
-  - Resolved host, profile, and auth source (flag, env, config).
-  - The HTTP request: method, URL, headers (auth header redacted), and body (truncated if large).
-  - The HTTP response: status code, headers, and body (truncated to a reasonable limit such as 64 KB).
+- what a **target** is (host/origin/base URL/DSN/etc.)
+- what a **profile/context** is (defaults + binding metadata)
+- what a **credential binding** is (what key(s) secrets are bound to)
+- what defaults exist (global vs per-target vs per-profile)
+- uniqueness model (globally unique names vs unique-within-target)
 
-### Verbosity levels for HTTP detail
+## Protocol-Level Error Handling
 
-| Level | What the user sees on stderr |
-|---|---|
-| Default | Error summary only: what failed, why, what now. |
-| `--verbose` (`-v`) | Above plus: resolved host/profile/auth source, HTTP method and URL, response status code. |
-| `-vv` | Above plus: request and response headers (auth redacted), response body (truncated). |
-| `-vvv` | Above plus: full request body, full response body, timing, retry attempts. |
+Service CLIs should extend the generic error rules with protocol-aware recovery hints:
+
+- Always include the effective target and relevant IDs.
+- For auth errors, print the recovery command (e.g. `tool auth login --target <...>`).
+- For not-found errors, echo back what was looked up so typos are obvious.
+- For server-side failures, say it is server-side and suggest server logs.
+- For transport failures (DNS, timeout, TLS, refused), name the target and suggest connectivity checks.
+
+HTTP is one example:
+
+- 401/403 → auth recovery guidance (exit `3`/`4`)
+- 404 → not found (exit `5`)
+- 409/412 → conflict/precondition (exit `6`)
+- 429 → rate limited (exit `7`)
+- network/timeouts → transport failure (exit `8`)
+
+Non-HTTP examples:
+
+- TLS handshake failure → transport failure (exit `8`)
+- socket connection refused → transport failure (exit `8`)
+- authentication rejected by protocol handshake → auth failure (exit `3`/`4`)
+
+## Protocol-Level Diagnostic Logging
+
+In addition to [cli-patterns.md](cli-patterns.md), capture protocol exchange details in diagnostics:
+
+- resolved target + profile/context + auth source (flag/env/config/secret-store)
+- redacted credential hints (never log tokens/cookies/authorization headers)
+- request/response metadata appropriate to the protocol
+
+HTTP example:
+
+- method, URL, headers (auth redacted), body (truncated)
+- status, headers, body (truncated, e.g. 64 KB)
+
+Non-HTTP example:
+
+- endpoint, negotiated protocol/version, handshake failures
+- TLS peer cert subject/issuer (no private key material)
 
 ## Distilled Patterns (Service)
 
-The bundled reference repos converge on service-specific patterns worth teaching directly.
-
-- Resolve target, profile, and auth once in shared runtime code instead of scattering that logic through commands.
-  - See [../assets/examples/csharp/spectre/runtime/TargetResolver.cs](../assets/examples/csharp/spectre/runtime/TargetResolver.cs) and [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs).
-- Make target inference layered, inspectable, and reversible.
-  - A good model is explicit flags first, then git context, then environment fallback, with clear errors when nothing resolves. See [../assets/examples/rust/clap/target_resolution.rs](../assets/examples/rust/clap/target_resolution.rs).
-- Bind stored credentials to canonical host keys and refuse to silently reuse them across mismatched targets.
-  - The canonical sketch is [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs).
+- Resolve target/profile/auth once in shared runtime code instead of scattering through commands.
+- Make inference layered, inspectable, and reversible (flags → git context → env fallback).
+- Bind stored credentials to the chosen target identity key and refuse to silently reuse across mismatched targets.
 
 ## Local Cautions (Service)
 
-Service CLIs have additional pitfalls beyond the generic cautions in [cli-patterns.md](cli-patterns.md):
-
-- Do not store plaintext secrets in generic JSON stores unless the product explicitly requires that tradeoff.
-- Do not log raw `Authorization`, cookie, or token-bearing command-line arguments in diagnostics.
-- Do not prompt, spin, or wait for secret input unless stdin and stderr are attached to a terminal. `--quiet` alone is not a sufficient guard.
-- Do not silently pick the first matching profile when multiple profiles map to the same host. Require an explicit `--profile` or a host-default mapping.
+- Do not store plaintext secrets in general config stores unless explicitly chosen and documented.
+- Do not log raw `Authorization`, cookies, tokens, or token-bearing CLI args in diagnostics.
+- Do not prompt unless stdin and stderr are attached to a terminal; `--quiet` is not a sufficient guard.
+- Do not silently pick the first matching profile when multiple profiles match a target; require `--profile` or a default mapping.
 
 ## Service CLI Design Checklist Additions
 
-In addition to the generic checklist in [cli-patterns.md](cli-patterns.md), service CLIs should pin down before implementation:
+In addition to the generic checklist in [cli-patterns.md](cli-patterns.md), service-like CLIs should pin down:
 
-- Auth commands and auth failure behavior
-- Profile and host resolution
-- Credential storage model and canonical host-key rules
-- Target-resolution order, fallback heuristics, and any git or directory inference
+- auth commands and auth failure behavior
+- target identity mode + normalization rules
+- resolution order and ambiguity handling
+- config-store vs secret-store model
+- protocol-level diagnostics and exit-code mapping
 
-Before shipping, also validate:
+Before shipping, validate at least:
 
 - one auth help page
 - one privileged command with auth failure recovery
-- one secret flow (token set via stdin or browser)
+- one secret flow (stdin or browser/device flow)

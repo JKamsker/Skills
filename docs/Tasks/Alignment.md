@@ -1,5 +1,7 @@
 # Updated Improvement Plan for the Skill
 
+> Status: Implemented on 2026-03-16. See `docs/Tasks/Alignment.TASKS.md` for the checked-off execution list.
+
 ## 1. Goal
 
 Turn the skill from a set of individually good documents into a **single coherent design system for CLI ergonomics**.

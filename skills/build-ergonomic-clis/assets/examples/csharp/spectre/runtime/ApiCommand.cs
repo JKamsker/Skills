@@ -1,5 +1,5 @@
-using Spectre.Console;
 using Spectre.Console.Cli;
+using System.Text.Json;
 
 namespace ExampleCli.Runtime;
 
@@ -22,21 +22,33 @@ public sealed class CliException : Exception
         => new(10, message);
 }
 
+file sealed record JsonMeta(
+    int SchemaVersion,
+    string? DiagnosticLogPath = null);
+
+file sealed record JsonError(
+    string Kind,
+    string Message,
+    string? Recovery = null);
+
+file sealed record JsonEnvelope(
+    bool Ok,
+    object? Data,
+    JsonError? Error,
+    JsonMeta Meta);
+
 public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
     where TSettings : GlobalOptions
 {
     private readonly TargetResolver _resolver;
     private readonly DiagnosticLogger _diagnosticLogger;
-    private readonly IAnsiConsole _console;
 
     protected ApiCommand(
         TargetResolver resolver,
-        DiagnosticLogger diagnosticLogger,
-        IAnsiConsole console)
+        DiagnosticLogger diagnosticLogger)
     {
         _resolver = resolver;
         _diagnosticLogger = diagnosticLogger;
-        _console = console;
     }
 
     public sealed override async Task<int> ExecuteAsync(
@@ -51,7 +63,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (CliException ex)
         {
-            RenderCliError(ex);
+            RenderCliError(ex, settings.OutputMode);
             return ex.ExitCode;
         }
 
@@ -61,21 +73,19 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (CliException ex)
         {
-            RenderCliError(ex);
+            RenderCliError(ex, resolved.OutputMode);
             return ex.ExitCode;
         }
         catch (HttpRequestException ex)
         {
             var logPath = _diagnosticLogger.Write(resolved, context.Name, ex);
-            _console.MarkupLine($"[red]Network error:[/] {Markup.Escape(ex.Message)}");
-            _console.MarkupLine($"[yellow]Diagnostic log:[/] {Markup.Escape(logPath)}");
+            RenderNetworkError(ex, logPath, resolved.OutputMode);
             return 8;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var logPath = _diagnosticLogger.Write(resolved, context.Name, ex);
-            _console.MarkupLine("[red]Unexpected client error.[/]");
-            _console.MarkupLine($"[yellow]Diagnostic log:[/] {Markup.Escape(logPath)}");
+            RenderUnexpectedError(ex, logPath, resolved.OutputMode);
             return 1;
         }
     }
@@ -86,10 +96,86 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         ResolvedContext resolved,
         CancellationToken cancellationToken);
 
-    private void RenderCliError(CliException ex)
+    private static void RenderCliError(CliException ex, OutputMode outputMode)
     {
-        _console.MarkupLine($"[red]Error:[/] {Markup.Escape(ex.Message)}");
+        if (outputMode == OutputMode.Json)
+        {
+            WriteJson(new JsonEnvelope(
+                Ok: false,
+                Data: null,
+                Error: new JsonError(
+                    Kind: KindForExitCode(ex.ExitCode),
+                    Message: ex.Message,
+                    Recovery: ex.RecoveryCommand),
+                Meta: new JsonMeta(SchemaVersion: 1)));
+            return;
+        }
+
+        Console.Error.WriteLine($"Error: {ex.Message}");
         if (!string.IsNullOrWhiteSpace(ex.RecoveryCommand))
-            _console.MarkupLine($"[dim]Try:[/] {Markup.Escape(ex.RecoveryCommand)}");
+            Console.Error.WriteLine($"Try: {ex.RecoveryCommand}");
+    }
+
+    private static void RenderNetworkError(HttpRequestException ex, string logPath, OutputMode outputMode)
+    {
+        if (outputMode == OutputMode.Json)
+        {
+            WriteJson(new JsonEnvelope(
+                Ok: false,
+                Data: null,
+                Error: new JsonError(
+                    Kind: "network",
+                    Message: ex.Message),
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: logPath)));
+            return;
+        }
+
+        Console.Error.WriteLine($"Network error: {ex.Message}");
+        Console.Error.WriteLine($"Diagnostic log: {logPath}");
+    }
+
+    private static void RenderUnexpectedError(Exception ex, string logPath, OutputMode outputMode)
+    {
+        if (outputMode == OutputMode.Json)
+        {
+            WriteJson(new JsonEnvelope(
+                Ok: false,
+                Data: null,
+                Error: new JsonError(
+                    Kind: "unexpected",
+                    Message: ex.Message),
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: logPath)));
+            return;
+        }
+
+        Console.Error.WriteLine("Unexpected client error.");
+        Console.Error.WriteLine($"Diagnostic log: {logPath}");
+    }
+
+    private static string KindForExitCode(int exitCode)
+    {
+        return exitCode switch
+        {
+            2 => "usage",
+            3 => "not_authenticated",
+            4 => "not_authorized",
+            5 => "not_found",
+            6 => "conflict",
+            7 => "rate_limited",
+            8 => "network",
+            10 => "cancelled",
+            _ => "error",
+        };
+    }
+
+    private static void WriteJson(JsonEnvelope envelope)
+    {
+        var options = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+        };
+
+        Console.Out.WriteLine(JsonSerializer.Serialize(envelope, options));
     }
 }

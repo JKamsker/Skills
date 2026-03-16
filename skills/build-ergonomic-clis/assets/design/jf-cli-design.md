@@ -47,6 +47,14 @@ API baseline: Jellyfin 10.11.3 OpenAPI spec (389 endpoints across 62 API tags)
 Designed by applying the ergonomic CLI skill principles to the actual Jellyfin API surface.
 Organized by user-facing domain, not by API controller tags.
 
+This worked example explicitly chooses:
+
+- **CLI class:** service-native
+- **Target identity mode:** hostname key (lowercased hostname)
+- **Machine contract style:** envelope JSON on stdout (default) with `meta.schemaVersion = 1`
+- **Secret storage:** separate secret store (OS credential store / keyring) preferred
+- **Confirmation refusal:** exit `2` when interaction is required but forbidden (`--quiet` / non-TTY)
+
 ---
 
 ## 1. Command Tree
@@ -480,7 +488,7 @@ jf auth api-keys delete <key>
    c. If TTY present and no `--password-stdin`, prompt for password on stderr with no-echo.
    d. If no TTY and no `--password-stdin`, fail: `Password required. Use --password-stdin or run interactively.`
    e. POST /Users/AuthenticateByName with username and password.
-   f. Store the returned AccessToken bound to the canonical host key.
+   f. Store the returned AccessToken in the secret store bound to the hostname identity key (lowercased hostname).
 4. Save a profile entry unless `--no-save` is passed.
 5. Print the username and server on stderr to confirm.
 
@@ -500,10 +508,17 @@ The CLI never opens a login prompt from a non-auth command. Ever.
 
 ### Token storage
 
-- Credentials (tokens, API keys) are stored inside profile objects within `config.json`. There is no separate credentials file.
-- Credentials are bound to a profile under a hostname-keyed host entry. The hostname is the canonical key.
-- File permissions: 600 (owner-only) on Unix. On Windows, ACL restricted to current user where possible.
-- If a legacy `credentials.json` exists and `config.json` does not, the CLI migrates automatically on first run. See `jf-cli-profile-system.md` §7 for migration details.
+- Non-secret profile metadata lives in `config.json`.
+- Credentials (tokens, API keys) are stored in a separate secret store (OS credential store / keyring / external helper), keyed by:
+  - hostname identity key (lowercased hostname)
+  - profile name (within that host)
+  - credential kind (`token` or `apiKey`)
+- File permissions: `config.json` is still user-only (600 on Unix; user-restricted ACL on Windows where possible).
+- If a legacy `credentials.json` exists and `config.json` does not, the CLI performs an automatic one-time migration on first run:
+  - moves the credential into the secret store
+  - writes the new `config.json`
+  - backs up `credentials.json` to `credentials.json.bak`
+  - emits a brief stderr note in human mode (no noisy output in machine mode)
 
 ### `jf auth set-token`
 
@@ -570,12 +585,13 @@ Override with `--config <path>` or `JF_CONFIG` env var.
       "defaultProfile": "main",
       "profiles": {
         "main": {
-          "token": "eyJhbGci...",
-          "username": "jonas",
-          "userId": "f692a3c1-..."
+          "user": "jonas",
+          "userId": "f692a3c1-...",
+          "authKind": "token"
         },
         "admin": {
-          "apiKey": "abc123def456"
+          "user": "admin",
+          "authKind": "apiKey"
         }
       }
     },
@@ -585,8 +601,8 @@ Override with `--config <path>` or `JF_CONFIG` env var.
       "defaultProfile": "admin",
       "profiles": {
         "admin": {
-          "token": "xyz789...",
-          "username": "admin"
+          "user": "admin",
+          "authKind": "token"
         }
       }
     }
@@ -594,7 +610,7 @@ Override with `--config <path>` or `JF_CONFIG` env var.
 }
 ```
 
-Hosts are keyed by network hostname (lowercased). Profiles are nested under their host. Credentials live inside profile objects — there is no separate credentials file.
+Hosts are keyed by network hostname (lowercased). Profiles are nested under their host. Credentials live in the secret store; `authKind` declares what is stored for the profile.
 
 ---
 
@@ -603,7 +619,7 @@ Hosts are keyed by network hostname (lowercased). Profiles are nested under thei
 | Variable | Maps to flag | Description |
 |---|---|---|
 | `JF_SERVER` | `--server` | Jellyfin server (hostname, alias, or full URL) |
-| `JF_TOKEN` | (auth override) | Access token, bypasses credential store |
+| `JF_TOKEN` | (auth override) | Access token override, bypasses the secret store |
 | `JF_PROFILE` | `--profile` | Active profile name |
 | `JF_CONFIG` | `--config` | Override config file path |
 | `JF_OUTPUT` | `--json` | Set to `json` for machine output |
@@ -652,15 +668,22 @@ Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--
 ### Machine output (`--json`)
 
 - Stable JSON on **stdout**.
-- One JSON object (or array) per command invocation.
+- One JSON envelope per command invocation (versioned).
 - No ANSI codes, no progress bars, no banners mixed in.
 - Errors are still JSON when `--json` is set:
 
 ```json
 {
-  "error": "not_authenticated",
-  "message": "Not authenticated for https://jf.example.com",
-  "recovery": "jf auth login --server https://jf.example.com"
+  "ok": false,
+  "data": null,
+  "error": {
+    "kind": "not_authenticated",
+    "message": "Not authenticated for https://jf.example.com",
+    "recovery": "jf auth login --server https://jf.example.com"
+  },
+  "meta": {
+    "schemaVersion": 1
+  }
 }
 ```
 
@@ -688,13 +711,20 @@ With `--json --dry-run`:
 
 ```json
 {
-  "dry_run": true,
-  "action": "delete_item",
-  "item": {
-    "id": "abc123",
-    "name": "My Movie",
-    "type": "Movie",
-    "path": "/media/movies/My Movie (2024)"
+  "ok": true,
+  "data": {
+    "dryRun": true,
+    "action": "delete_item",
+    "item": {
+      "id": "abc123",
+      "name": "My Movie",
+      "type": "Movie",
+      "path": "/media/movies/My Movie (2024)"
+    }
+  },
+  "error": null,
+  "meta": {
+    "schemaVersion": 1
   }
 }
 ```

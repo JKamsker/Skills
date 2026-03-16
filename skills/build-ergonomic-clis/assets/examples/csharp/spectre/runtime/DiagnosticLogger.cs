@@ -26,7 +26,8 @@ public sealed class DiagnosticLogger
         var builder = new StringBuilder();
         builder.AppendLine($"Timestamp: {DateTimeOffset.UtcNow:O}");
         builder.AppendLine($"Operation: {operation}");
-        builder.AppendLine($"Host: {context.Host}");
+        builder.AppendLine($"BaseUrl: {context.BaseUrl}");
+        builder.AppendLine($"TargetIdentityKey: {context.TargetIdentityKey}");
         builder.AppendLine($"Profile: {context.Profile}");
         builder.AppendLine($"AuthSource: {context.AuthSource}");
         builder.AppendLine($"Exception: {exception.GetType().FullName}");

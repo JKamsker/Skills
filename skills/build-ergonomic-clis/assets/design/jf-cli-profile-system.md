@@ -33,6 +33,7 @@ The profile system allows the CLI to manage credentials for multiple Jellyfin se
 - **Hostname-keyed**: Hosts are identified by their network hostname (e.g. `nas.local`, `jf.home.example.com`). This provides short, human-readable identifiers.
 - **Base URL inheritance**: Each host declares a `baseUrl`. Profiles inherit it by default but may override it (e.g. different port or path on the same hostname).
 - **Profile names are unique per host, not globally**. Two hosts may each have a profile named `admin`.
+- **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname + profile.
 - **Zero-config default**: A single server with a single profile requires no flags or env vars — it just works.
 - **Optional hostname aliases**: Each host may declare short aliases (e.g. `home`, `nas`). Aliases are not globally unique — multiple hosts may share an alias — but the CLI warns on ambiguity.
  
@@ -75,14 +76,14 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
         "<profile-name>": {
           // Optional. Overrides the host-level baseUrl for this profile only.
           "baseUrl": "<url>",
- 
-          // Authentication — one of the following combinations:
-          "token": "<access-token>",
-          "username": "<string>",
+
+          // Non-secret profile metadata (used for display/debugging only).
+          "user": "<string>",
           "userId": "<guid>",
- 
-          // OR api key auth:
-          "apiKey": "<api-key>"
+
+          // Non-secret declaration of which credential kind is stored for this profile.
+          // The credential itself lives in the secret store.
+          "authKind": "token" // or "apiKey"
         }
       }
     }
@@ -90,6 +91,19 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
 }
 ```
  
+### Secret Store (preferred)
+
+Tokens and API keys are stored separately from `config.json` (OS credential store / keyring / external helper).
+
+Recommended keying model:
+
+- `jf:cred:{hostname}:{profile}:token`
+- `jf:cred:{hostname}:{profile}:apiKey`
+
+Where `{hostname}` is the **hostname key** (lowercased) and `{profile}` is the profile name within that host.
+
+Fallback (allowed but discouraged): a separate `credentials.json` file with strict permissions and explicit redaction rules. If this fallback is used, it must be clearly labeled as a tradeoff in docs and help.
+
 ### Example
  
 ```json
@@ -102,12 +116,13 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
       "defaultProfile": "main",
       "profiles": {
         "main": {
-          "token": "eyJhbGciOi...",
-          "username": "jonas",
-          "userId": "f692a3c1-0498-4a6e-b596-1a45cb918037"
+          "user": "jonas",
+          "userId": "f692a3c1-0498-4a6e-b596-1a45cb918037",
+          "authKind": "token"
         },
         "admin": {
-          "apiKey": "abc123def456"
+          "user": "admin",
+          "authKind": "apiKey"
         }
       }
     },
@@ -117,13 +132,13 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
       "defaultProfile": "admin",
       "profiles": {
         "admin": {
-          "token": "xyz789...",
-          "username": "admin"
+          "user": "admin",
+          "authKind": "token"
         },
         "legacy": {
           "baseUrl": "http://nas.local:8920",
-          "token": "old123...",
-          "username": "admin"
+          "user": "admin",
+          "authKind": "token"
         }
       }
     }
@@ -142,10 +157,9 @@ Overridable with `--config <path>` or `JF_CONFIG` env var.
 | `hosts[].defaultProfile` | No | Default profile name for this host. If absent: inferred if there is exactly one profile, otherwise error. |
 | `hosts[].profiles` | Yes | Map of profile name → profile object. At least one required. |
 | `profiles[].baseUrl` | No | Overrides the host-level `baseUrl` for this profile. |
-| `profiles[].token` | No | Jellyfin access token (from authentication). |
-| `profiles[].username` | No | Username associated with the token. |
-| `profiles[].userId` | No | Jellyfin user ID associated with the token. |
-| `profiles[].apiKey` | No | Jellyfin API key (alternative to token auth). |
+| `profiles[].user` | No | Username for display/debugging only (non-secret). |
+| `profiles[].userId` | No | Jellyfin user ID for display/debugging only (non-secret). |
+| `profiles[].authKind` | Yes | Declares which credential kind is stored for this profile in the secret store (`token` or `apiKey`). |
  
 ---
  
@@ -236,6 +250,48 @@ When `--server` or `JF_SERVER` provides a full URL, the hostname is extracted fo
 Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent). If parsing fails (no scheme), treat the input as a bare hostname.
  
 Port and path are **not** part of the hostname key. They are preserved only in `baseUrl`.
+
+### Exact normalization rules (hostname-key identity)
+
+The hostname key is derived with these rules:
+
+- Trim whitespace.
+- If the input looks like a URL, parse it and extract `.hostname`.
+- Otherwise treat the input as a bare hostname.
+- Lowercase the hostname for the identity key.
+- Do not include scheme, port, path, query, or fragment in the identity key.
+
+The effective base URL used for network calls is derived separately:
+
+- Preserve scheme/port/path when the user provided a full URL.
+- Drop query/fragment.
+- Trim a trailing `/`.
+
+### Pseudocode (resolution skeleton)
+
+```text
+resolve(serverArg, profileArg):
+  hostInput = serverArg ?? env.JF_SERVER ?? config.defaultHost ?? singleHostOrError()
+
+  // Host lookup uses the hostname key (lowercased hostname).
+  hostnameKey =
+    if isUrl(hostInput) then lower(parseUrl(hostInput).hostname)
+    else lower(hostInput)
+
+  host = config.hosts[hostnameKey] ?? resolveAlias(hostnameKey) ?? error()
+
+  profileName = profileArg ?? env.JF_PROFILE ?? host.defaultProfile ?? singleProfileOrError()
+  profile = host.profiles[profileName] ?? error()
+
+  effectiveBaseUrl =
+    if isUrl(hostInput) then normalizeBaseUrl(hostInput) // invocation-only override
+    else normalizeBaseUrl(profile.baseUrl ?? host.baseUrl)
+
+  credentialKind = profile.authKind
+  secret = secretStore.get("jf:cred:{hostnameKey}:{profileName}:{credentialKind}") ?? missingAuthError()
+
+  return (hostnameKey, profileName, effectiveBaseUrl, secret)
+```
  
 ---
  
@@ -260,10 +316,11 @@ jf auth login --server <url> [--profile <name>] [--api-key <key>]
 **Flow:**
  
 1. Extract hostname from `--server` URL.
-2. POST to `<baseUrl>/Users/AuthenticateByName` (or store API key directly).
+2. POST to `<baseUrl>/Users/AuthenticateByName` (or accept an API key via an explicit secret flag).
 3. Create or update `hosts[hostname]`:
    - Set `baseUrl` on the host if this is a new host entry.
-   - Create `profiles[name]` with credentials.
+   - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
+   - Store the credential in the secret store under `jf:cred:{hostname}:{profile}:{authKind}`.
    - If this is the only host, set as `defaultHost`.
    - If this is the only profile on the host, set as `defaultProfile`.
 4. Write config.
@@ -279,6 +336,8 @@ jf auth logout [--server <host>] [--profile <name>]
 ```
  
 Resolves host and profile via standard resolution (§3). Revokes the token server-side if possible, then removes the profile from config. If it was the last profile on the host, removes the host entry. If the host was `defaultHost` and is removed, clears `defaultHost`.
+
+Also removes the stored credential from the secret store for that hostname/profile.
  
 ### 5.2 Profile Management
  
@@ -327,7 +386,7 @@ Host:     nas.local
 Profile:  admin
 Base URL: https://nas.local:8096/jellyfin
 Username: admin
-Auth:     token
+Auth:     token (stored in secret store)
 ```
  
 #### `jf auth profiles use <name>`
@@ -476,15 +535,16 @@ These flags are available on all commands, not just `auth`:
  
 ### From `credentials.json`
  
-If `config.json` does not exist but a legacy `credentials.json` is found in the same directory, the CLI performs automatic silent migration on first run:
+If `config.json` does not exist but a legacy `credentials.json` is found in the same directory, the CLI performs an automatic one-time migration on first run:
  
 1. Read `credentials.json`.
 2. Extract the server URL and credentials.
 3. Parse the hostname from the server URL.
 4. Create `config.json` with a single host and a single profile named `"default"`.
 5. Set that host as `defaultHost` and `"default"` as `defaultProfile`.
-6. Rename `credentials.json` to `credentials.json.bak`.
-7. Print: `Migrated credentials to new profile format. Backup: credentials.json.bak`
+6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostname}:default:{authKind}`.
+7. Rename `credentials.json` to `credentials.json.bak`.
+8. In human mode, print a one-line note to stderr: `Migrated credentials to new profile format. Backup: credentials.json.bak`
  
 No data is lost. The backup file is never read by the CLI again.
  
@@ -498,7 +558,7 @@ No data is lost. The backup file is never read by the CLI again.
 - `defaultProfile`, if set on a host, must be a key in that host's `profiles`.
 - Every host must have a non-empty `baseUrl`.
 - Every host must have at least one profile.
-- Each profile must have either `token` or `apiKey` (not both, not neither).
+- Each profile must have a valid `authKind` (`token` or `apiKey`).
  
 Invalid config produces a clear error message pointing to the specific issue, e.g.:
  

@@ -2,6 +2,9 @@ using System.Linq;
 
 namespace ExampleCli.Runtime;
 
+// This example implements the **hostname-key** target identity mode (the Jellyfin worked-example choice).
+// - Network operations use a normalized base URL (scheme/port/path may matter).
+// - Credentials and defaults bind to the hostname identity key (lowercased hostname).
 public enum AuthSource
 {
     None,
@@ -12,13 +15,13 @@ public enum AuthSource
 
 public sealed record ProfileConfig(
     string Name,
-    string? Host = null,
-    string? Token = null,
+    string? Hostname = null,
+    string? BaseUrl = null,
     OutputMode? Output = null);
 
 public sealed record ResolvedContext(
-    string Host,
-    string CanonicalHostKey,
+    string BaseUrl,
+    string TargetIdentityKey,
     string Profile,
     string? Token,
     AuthSource AuthSource,
@@ -28,16 +31,23 @@ public interface IProfileStore
 {
     string? ActiveProfile { get; }
     IReadOnlyDictionary<string, ProfileConfig> Profiles { get; }
-    IReadOnlyDictionary<string, string> HostDefaults { get; }
+    IReadOnlyDictionary<string, string> TargetDefaults { get; }
+}
+
+public interface ICredentialStore
+{
+    string? GetToken(string targetIdentityKey, string profileName);
 }
 
 public sealed class TargetResolver
 {
     private readonly IProfileStore _profiles;
+    private readonly ICredentialStore _credentials;
 
-    public TargetResolver(IProfileStore profiles)
+    public TargetResolver(IProfileStore profiles, ICredentialStore credentials)
     {
         _profiles = profiles;
+        _credentials = credentials;
     }
 
     public ResolvedContext Resolve(GlobalOptions options)
@@ -46,45 +56,49 @@ public sealed class TargetResolver
             options.Profile,
             Environment.GetEnvironmentVariable("EXAMPLE_PROFILE"));
 
-        var explicitHost = FirstNonEmpty(
+        var explicitBaseUrl = FirstNonEmpty(
             options.Host,
             Environment.GetEnvironmentVariable("EXAMPLE_HOST"));
 
-        explicitHost = explicitHost is null ? null : NormalizeHost(explicitHost);
+        explicitBaseUrl = explicitBaseUrl is null ? null : NormalizeBaseUrl(explicitBaseUrl);
+        var explicitTargetKey = explicitBaseUrl is null ? null : CanonicalTargetIdentity(explicitBaseUrl);
 
         var profileName = explicitProfile
-            ?? SelectProfileForHost(explicitHost)
+            ?? SelectProfileForTarget(explicitTargetKey)
             ?? _profiles.ActiveProfile
             ?? "default";
 
         _profiles.Profiles.TryGetValue(profileName, out var profile);
-        var profileHost = profile?.Host is null ? null : NormalizeHost(profile.Host);
+        var profileHostname = profile?.Hostname is null ? null : NormalizeHostname(profile.Hostname);
 
-        string resolvedHost;
-        if (explicitHost is not null)
+        if (explicitTargetKey is not null && explicitProfile is not null && profileHostname is not null && profileHostname != explicitTargetKey)
+            throw CliException.Usage($"Profile '{profileName}' is configured for '{profileHostname}', but the target is '{explicitTargetKey}'.");
+
+        string resolvedBaseUrl;
+        if (explicitBaseUrl is not null)
         {
-            if (explicitProfile is not null && profileHost is not null && CanonicalHostKey(profileHost) != CanonicalHostKey(explicitHost))
-                throw CliException.Usage($"Profile '{profileName}' is configured for '{profileHost}', but the target host is '{explicitHost}'.");
-
-            resolvedHost = explicitHost;
+            resolvedBaseUrl = explicitBaseUrl;
         }
-        else if (profileHost is not null)
+        else if (!string.IsNullOrWhiteSpace(profile?.BaseUrl))
         {
-            resolvedHost = profileHost;
+            resolvedBaseUrl = NormalizeBaseUrl(profile!.BaseUrl!);
+        }
+        else if (profileHostname is not null)
+        {
+            resolvedBaseUrl = NormalizeBaseUrl(profileHostname);
         }
         else
         {
-            resolvedHost = "https://api.example.test";
+            resolvedBaseUrl = "https://api.example.test";
         }
 
-        var canonicalHostKey = CanonicalHostKey(resolvedHost);
-        var profileMatchesHost = profileHost is not null && CanonicalHostKey(profileHost) == canonicalHostKey;
+        var targetIdentityKey = CanonicalTargetIdentity(resolvedBaseUrl);
 
         var tokenFromFlag = FirstNonEmpty(options.Token);
         var tokenFromEnv = FirstNonEmpty(Environment.GetEnvironmentVariable("EXAMPLE_TOKEN"));
         var token = tokenFromFlag
             ?? tokenFromEnv
-            ?? (profileMatchesHost ? profile?.Token : null);
+            ?? _credentials.GetToken(targetIdentityKey, profileName);
 
         var authSource = tokenFromFlag is not null
             ? AuthSource.Flag
@@ -95,26 +109,28 @@ public sealed class TargetResolver
                     : AuthSource.None;
 
         return new ResolvedContext(
-            Host: resolvedHost,
-            CanonicalHostKey: canonicalHostKey,
+            BaseUrl: resolvedBaseUrl,
+            TargetIdentityKey: targetIdentityKey,
             Profile: profileName,
             Token: token,
             AuthSource: authSource,
             OutputMode: options.OutputMode);
     }
 
-    private string? SelectProfileForHost(string? explicitHost)
+    private string? SelectProfileForTarget(string? explicitTargetKey)
     {
-        if (explicitHost is null)
+        if (explicitTargetKey is null)
             return null;
 
-        var hostKey = CanonicalHostKey(explicitHost);
-
-        if (_profiles.HostDefaults.TryGetValue(hostKey, out var profileName))
+        if (_profiles.TargetDefaults.TryGetValue(explicitTargetKey, out var profileName))
             return profileName;
 
         var matchingProfiles = _profiles.Profiles
-            .Where(pair => pair.Value.Host is not null && CanonicalHostKey(pair.Value.Host) == hostKey)
+            .Where(pair =>
+            {
+                var hostname = pair.Value.Hostname is null ? null : NormalizeHostname(pair.Value.Hostname);
+                return hostname is not null && hostname == explicitTargetKey;
+            })
             .Select(pair => pair.Key)
             .ToArray();
 
@@ -123,25 +139,24 @@ public sealed class TargetResolver
             0 => null,
             1 => matchingProfiles[0],
             _ => throw CliException.Usage(
-                $"Multiple profiles match '{explicitHost}'. Pass --profile or define a host default."),
+                $"Multiple profiles match '{explicitTargetKey}'. Pass --profile or define a target default."),
         };
     }
 
-    public static string NormalizeHost(string raw)
+    public static string NormalizeBaseUrl(string raw)
     {
         var trimmed = raw.Trim();
         if (string.IsNullOrWhiteSpace(trimmed))
-            throw CliException.Usage("Host is required.");
+            throw CliException.Usage("Target is required.");
 
         if (!trimmed.Contains("://", StringComparison.Ordinal))
             trimmed = $"https://{trimmed}";
 
         if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || string.IsNullOrWhiteSpace(uri.Host))
-            throw CliException.Usage($"Invalid host URL '{raw}'.");
+            throw CliException.Usage($"Invalid target URL '{raw}'.");
 
         var builder = new UriBuilder(uri)
         {
-            Path = string.Empty,
             Query = string.Empty,
             Fragment = string.Empty,
         };
@@ -149,14 +164,22 @@ public sealed class TargetResolver
         if (builder.Uri.IsDefaultPort)
             builder.Port = -1;
 
-        return builder.Uri.GetLeftPart(UriPartial.Authority).TrimEnd('/');
+        var value = builder.Uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        return string.IsNullOrWhiteSpace(value) ? builder.Uri.GetLeftPart(UriPartial.Authority).TrimEnd('/') : value;
     }
 
-    public static string CanonicalHostKey(string raw)
+    public static string CanonicalTargetIdentity(string normalizedBaseUrl)
     {
-        var uri = new Uri(NormalizeHost(raw));
-        var port = uri.IsDefaultPort ? string.Empty : $":{uri.Port}";
-        return $"{uri.Scheme.ToLowerInvariant()}://{uri.Host.ToLowerInvariant()}{port}";
+        var uri = new Uri(normalizedBaseUrl);
+        return NormalizeHostname(uri.Host);
+    }
+
+    public static string NormalizeHostname(string raw)
+    {
+        var trimmed = raw.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+            throw CliException.Usage("Hostname is required.");
+        return trimmed.ToLowerInvariant();
     }
 
     private static string? FirstNonEmpty(params string?[] candidates)

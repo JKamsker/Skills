@@ -2,14 +2,21 @@
 
 ## Stack
 
-For modern .NET CLIs, prefer this baseline:
+### Generic / local baseline
+
+For modern .NET CLIs (including local-only tools), prefer this baseline:
 
 - `Spectre.Console.Cli` for command trees and help
 - `Microsoft.Extensions.Hosting` for DI, config, and logging
 - `AsyncCommand<TSettings>` for I/O-bound commands
-- `IHttpClientFactory` for HTTP clients
 
 This matches the strongest pattern from `jf`: Spectre owns the command surface, while the service container owns runtime wiring.
+
+### Service add-on (HTTP/remote)
+
+Only if the CLI actually talks to a remote service:
+
+- `IHttpClientFactory` for HTTP clients
 
 ## Canonical Example Assets
 
@@ -17,8 +24,8 @@ Prefer the small examples in this skill before copying repository code directly:
 
 - [../assets/examples/csharp/spectre/command-tree/Program.cs](../assets/examples/csharp/spectre/command-tree/Program.cs): task-first branch registration with descriptions and a default subcommand.
 - [../assets/examples/csharp/spectre/runtime/GlobalOptions.cs](../assets/examples/csharp/spectre/runtime/GlobalOptions.cs): shared Spectre global flags for host, profile, output, dry-run, and confirmations.
-- [../assets/examples/csharp/spectre/runtime/TargetResolver.cs](../assets/examples/csharp/spectre/runtime/TargetResolver.cs): canonical host keys, profile matching, and flag/env/config/default precedence.
-- [../assets/examples/csharp/spectre/runtime/ApiCommand.cs](../assets/examples/csharp/spectre/runtime/ApiCommand.cs): central context resolution, exit-code mapping, and recovery-oriented error reporting.
+- [../assets/examples/csharp/spectre/runtime/TargetResolver.cs](../assets/examples/csharp/spectre/runtime/TargetResolver.cs): hostname-key target identity, base URL normalization, and flag/env/config/default precedence (Jellyfin variant).
+- [../assets/examples/csharp/spectre/runtime/ApiCommand.cs](../assets/examples/csharp/spectre/runtime/ApiCommand.cs): central context resolution, exit-code mapping, and JSON-envelope-safe error reporting.
 - [../assets/examples/csharp/spectre/runtime/DangerousActionGuard.cs](../assets/examples/csharp/spectre/runtime/DangerousActionGuard.cs): TTY-aware confirmation, `--dry-run`, and `--yes`.
 - [../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs](../assets/examples/csharp/spectre/runtime/DiagnosticLogger.cs): timestamped diagnostic logs with header redaction.
 
@@ -138,6 +145,15 @@ Rules:
 - If a command file approaches 500 LOC, refactor by extracting collaborators, not by slicing the command into `partial` files.
 - Use `Validate()` on settings when the framework path is simple enough.
 - Prefer repeatable options to comma-separated user input.
+
+## Local Project Discovery and Process Execution
+
+Local-only and hybrid CLIs often need discovery + passthrough behavior. Make it explicit:
+
+- Discovery: walk parent directories up to a documented stop condition (filesystem root, VCS root, marker file).
+- Overrides: provide explicit flags (`--file`, `--project`, `--manifest`, `--cwd`) that bypass discovery.
+- Diagnostics: surface the resolved path in `--dry-run` / `--verbose`.
+- Child processes: when acting as a wrapper (build/test/lint), default to stdio passthrough unless the user opted into capture/output formatting.
 
 ## Auth, Config, and Profile Resolution
 
