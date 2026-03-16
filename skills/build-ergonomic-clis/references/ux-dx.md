@@ -134,14 +134,39 @@ Resolution rules should be documented and enforced:
 3. Config file or selected profile
 4. Hardcoded defaults
 
-If `--host` is set without `--profile`, pick a profile using a host-default mapping or a single matching profile. If multiple profiles match, require the user to choose instead of guessing.
+If the host flag is set without `--profile`, pick a profile using a host-default mapping or a single matching profile. If multiple profiles match, require the user to choose instead of guessing. The flag name should reflect whether the value is always a hostname (`--host`) or can also be a full URL (`--server`).
 
 If repo or directory inference exists, document it as a lower-priority fallback, not the primary contract.
 
 Good examples from the local references:
 
-- One local reference binds host defaults to profiles and only reuses stored auth when the profile host matches the target host.
+- The [Jellyfin CLI profile system](../assets/design/jf-cli-profile-system.md) binds host defaults to profiles and only reuses stored auth when the profile host matches the target host. It is the worked example for the patterns below.
 - Another local reference can infer host and repo from git remotes or an environment fallback, but that behavior stays visible in docs and errors.
+
+### Hostname Normalization and Canonical Keys
+
+Lowercase hostnames before using them as config keys. Strip port and path from the key; store those in `baseUrl`. Two URLs that share a hostname resolve to the same host entry; URL differences become per-profile overrides. Example: `https://myserver.com` and `https://myserver.com:8096/path` both key on `myserver.com`.
+
+### Optional Hostname Aliases
+
+Allow each host to declare short aliases (e.g. `home`, `nas`). Resolution order: exact host key match first, alias scan second. If multiple hosts share an alias:
+
+- Use the first match (config file order) and emit a warning.
+- The tie-break is deterministic so scripts behave predictably.
+
+If an alias is identical to an existing host key, the host key always wins — the alias is effectively shadowed. Warn when this situation is created.
+
+### Single-Entry Inference
+
+One host configured? Use it. One profile on a host? Use it. This gives zero-config behavior for the common single-server, single-account case without adding hidden global state.
+
+### Validation on Load and Write
+
+Validate referential integrity on every config load: default pointers exist, every host has at least one profile, credential fields are consistent. Never write a config that violates these rules; cascade cleanup instead (e.g. deleting the last profile also deletes the host entry).
+
+### Migration from Legacy Formats
+
+If the old-format config exists and the new format does not, migrate silently on first run. Back up the old file (`.bak`). Print a one-line notice to stderr. The backup is never read again.
 
 ## Distilled Patterns from Local Repos
 

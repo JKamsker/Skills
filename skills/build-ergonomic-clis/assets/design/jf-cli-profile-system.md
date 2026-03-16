@@ -1,6 +1,30 @@
 # Jellyfin CLI — Host-Specific Profile System
- 
+
+## Table of Contents
+
+- [1. Overview](#1-overview)
+- [2. Config File](#2-config-file)
+- [3. Resolution](#3-resolution)
+  - [3.1 Host Resolution](#31-host-resolution)
+  - [3.2 Profile Resolution](#32-profile-resolution)
+  - [3.3 Base URL Resolution](#33-base-url-resolution)
+  - [3.4 Resolution Summary](#34-resolution-summary)
+- [4. Hostname Extraction](#4-hostname-extraction)
+- [5. CLI Commands](#5-cli-commands)
+  - [5.1 Authentication](#51-authentication)
+  - [5.2 Profile Management](#52-profile-management)
+  - [5.3 Host Management](#53-host-management)
+- [6. Global Flags](#6-global-flags)
+- [7. Migration](#7-migration)
+- [8. Validation Rules](#8-validation-rules)
+- [9. Edge Cases](#9-edge-cases)
+- [10. Environment Variable Summary](#10-environment-variable-summary)
+
+---
+
 ## 1. Overview
+
+> **Related documents:** For the broader CLI design (command tree, output modes, exit codes), see [`jf-cli-design.md`](jf-cli-design.md). For generic self-hosted service patterns (hostname normalization, single-entry inference, migration), see [`../../references/ux-dx.md`](../../references/ux-dx.md).
  
 The profile system allows the CLI to manage credentials for multiple Jellyfin servers and multiple accounts per server. Profiles are organized by hostname, with a two-level resolution chain: first resolve the host, then resolve the profile within that host.
  

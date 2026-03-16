@@ -21,6 +21,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 - Start with [references/ux-dx.md](references/ux-dx.md).
 - Define the command tree, help contract, auth and profile model, target resolution, env/config precedence, reserved flags, confirmation rules, machine output, and non-interactive behavior before talking about code structure.
 - Use [assets/design/jf-cli-design.md](assets/design/jf-cli-design.md) only when a worked self-hosted-service example would help benchmark the design after the first pass.
+- For the detailed host-keyed profile system specification (hostname resolution, aliases, migration, validation), see [assets/design/jf-cli-profile-system.md](assets/design/jf-cli-profile-system.md). Load this only when the design involves multi-server profile management.
 
 ### Review
 

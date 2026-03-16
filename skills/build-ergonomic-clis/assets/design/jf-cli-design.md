@@ -11,11 +11,10 @@
     - [Token storage](#token-storage)
     - [`jf auth set-token`](#jf-auth-set-token)
   - [4. Host / Profile / Config Resolution](#4-host--profile--config-resolution)
-    - [Precedence (highest wins)](#precedence-highest-wins)
+    - [Host resolution](#host-resolution)
     - [Profile resolution](#profile-resolution)
-    - [When `--host` is set without `--profile`](#when---host-is-set-without---profile)
-    - [Config file location](#config-file-location)
-    - [Config file format](#config-file-format)
+    - [Config file](#config-file)
+    - [Config schema](#config-schema)
   - [5. Environment Variables](#5-environment-variables)
   - [6. Reserved Flags](#6-reserved-flags)
   - [7. Output Modes](#7-output-modes)
@@ -75,7 +74,17 @@ jf
  |    |    |-- list                List all saved profiles
  |    |    |-- use <name>          Switch the active profile
  |    |    |-- show <name>         Show details of a profile
+ |    |    |-- rename <old> <new>  Rename a profile
  |    |    |-- delete <name>       Delete a saved profile
+ |    |-- host
+ |    |    |-- list                List configured hosts
+ |    |    |-- use <hostname>      Set the default host
+ |    |    |-- rename <old> <new>  Rename a host key
+ |    |    |-- delete <hostname>   Remove a host and its profiles  [confirm]
+ |    |    |-- alias
+ |    |    |    |-- add <host> <alias>    Add an alias
+ |    |    |    |-- remove <host> <alias> Remove an alias
+ |    |    |    |-- list [<host>]         List aliases
  |    |-- api-keys                 [admin] Manage server-level API keys
  |    |    |-- list                List all API keys (GET /Auth/Keys)
  |    |    |-- create <name>       Create a new API key (POST /Auth/Keys)
@@ -370,8 +379,9 @@ These flags are available on every command via `GlobalSettings`:
 
 | Flag | Short | Type | Description |
 |---|---|---|---|
-| `--host <URL>` | `-H` | string | Override the target Jellyfin server URL |
+| `--server <value>` | `-S` | string | Hostname, alias, or full URL of the target Jellyfin server |
 | `--profile <NAME>` | | string | Use a specific saved profile |
+| `--config <path>` | | string | Path to config file (overrides default location) |
 | `--json` | | bool | Output stable machine-readable JSON to stdout |
 | `--no-color` | | bool | Disable ANSI color/formatting (also respects `NO_COLOR` env var) |
 | `--quiet` | `-q` | bool | Suppress banners, progress, prompts. Fail if confirmation required. |
@@ -381,6 +391,8 @@ These flags are available on every command via `GlobalSettings`:
 | `--help` | `-h` | bool | Show help (Spectre built-in) |
 | `--version` | `-V` | bool | Show version (Spectre built-in) |
 
+**Note**: The generic pattern in `references/ux-dx.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a bare hostname, or an alias — not strictly a hostname.
+
 **Note**: `--force` is intentionally omitted from globals. It will only appear on
 specific commands where "bypass a conflict" has an unambiguous meaning (e.g., force-overwriting
 an image).
@@ -388,9 +400,9 @@ an image).
 ```csharp
 public class GlobalSettings : CommandSettings
 {
-    [CommandOption("-H|--host <URL>")]
-    [Description("Jellyfin server URL")]
-    public string? Host { get; set; }
+    [CommandOption("-S|--server <VALUE>")]
+    [Description("Jellyfin server (hostname, alias, or full URL)")]
+    public string? Server { get; set; }
 
     [CommandOption("--profile <NAME>")]
     [Description("Use a named profile")]
@@ -454,7 +466,7 @@ jf auth api-keys delete <key>
 
 ### Auth flow: `jf auth login`
 
-1. Resolve host from `--host` flag, `JF_HOST` env var, active profile, or fail.
+1. Resolve host from `--server` flag, `JF_SERVER` env var, active profile, or fail.
 2. If `--quick-connect`:
    a. Check GET /QuickConnect/Enabled. If disabled, fail with message.
    b. POST /QuickConnect/Initiate to get a code.
@@ -479,7 +491,7 @@ If no token is found or the token is invalid (401):
 
 ```
 Error: Not authenticated for https://jf.example.com
-Run: jf auth login --host https://jf.example.com
+Run: jf auth login --server https://jf.example.com
 ```
 
 Exit code: 3.
@@ -488,19 +500,18 @@ The CLI never opens a login prompt from a non-auth command. Ever.
 
 ### Token storage
 
-- Tokens are stored in a credential file separate from general config.
-- Credentials are keyed by **canonical host** (scheme + host + port, normalized).
-- Profiles reference a host key, not a token directly.
-- On disk: `~/.config/jf/credentials.json` (Linux/macOS) or `%APPDATA%/jf/credentials.json` (Windows).
+- Credentials (tokens, API keys) are stored inside profile objects within `config.json`. There is no separate credentials file.
+- Credentials are bound to a profile under a hostname-keyed host entry. The hostname is the canonical key.
 - File permissions: 600 (owner-only) on Unix. On Windows, ACL restricted to current user where possible.
+- If a legacy `credentials.json` exists and `config.json` does not, the CLI migrates automatically on first run. See `jf-cli-profile-system.md` §7 for migration details.
 
 ### `jf auth set-token`
 
 For automation scenarios where the user already has a token:
 
 ```
-jf auth set-token eyJhbGci... --host https://jf.example.com
-echo "eyJhbGci..." | jf auth set-token --stdin --host https://jf.example.com
+jf auth set-token eyJhbGci... --server https://jf.example.com
+echo "eyJhbGci..." | jf auth set-token --stdin --server https://jf.example.com
 ```
 
 By default, validates the token by calling GET /Users/Me. Skip with `--no-validate`.
@@ -509,83 +520,81 @@ By default, validates the token by calling GET /Users/Me. Skip with `--no-valida
 
 ## 4. Host / Profile / Config Resolution
 
-### Precedence (highest wins)
+Resolution is a two-step process: resolve the host, then resolve the profile within that host. For the full resolution algorithm, alias semantics, hostname extraction, validation, migration, and edge cases, see [`jf-cli-profile-system.md`](jf-cli-profile-system.md).
 
-1. `--host` CLI flag
-2. `JF_HOST` environment variable
-3. Active profile's host in config file
-4. Error: no target resolved
+### Host resolution
 
-There is no "default host" that silently applies. If nothing is configured, the CLI fails with a
-clear message:
+| Priority | Source | Behavior |
+|----------|--------|----------|
+| 1 | `--server <value>` flag | Full URL: extract hostname for lookup, use URL as runtime base URL override. Bare hostname or alias: lookup below. |
+| 2 | `JF_SERVER` env var | Same rules as `--server`. |
+| 3 | `defaultHost` in config | Used as-is. |
+| 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
+| 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <hostname>` |
 
-```
-Error: No Jellyfin server specified.
-Use --host <URL>, set JF_HOST, or run: jf auth login --host <URL>
-```
+Bare value lookup order: exact match against `hosts` keys first, then alias scan. Multiple alias matches → warn and use first (config file order).
 
 ### Profile resolution
 
-1. `--profile` CLI flag
-2. `JF_PROFILE` environment variable
-3. Active profile in config file (`active_profile` field)
-4. If only one profile exists, use it implicitly
-5. If multiple profiles exist and none selected, fail:
-   ```
-   Error: Multiple profiles found. Specify one with --profile or run:
-     jf auth profiles use <name>
-   Available: home, work, nas
-   ```
+Given a resolved host:
 
-### When `--host` is set without `--profile`
+| Priority | Source | Behavior |
+|----------|--------|----------|
+| 1 | `--profile <name>` flag | Must exist under the resolved host. |
+| 2 | `JF_PROFILE` env var | Must exist under the resolved host. |
+| 3 | `defaultProfile` for the host | Used as-is. |
+| 4 | Single profile | If the host has exactly one profile, use it implicitly. |
+| 5 | *(none)* | Error: `No profile specified for host "<hostname>". Use --profile or set a default.` |
 
-Look for a profile whose host matches. If exactly one matches, use it. If multiple match,
-require `--profile`. If none match, use the host with no profile (anonymous unless a token exists
-for that host).
+### Config file
 
-### Config file location
+Single file: `config.json`. Location:
 
-- Linux/macOS: `~/.config/jf/config.json`
-- Windows: `%APPDATA%/jf/config.json`
-- Override: `JF_CONFIG_DIR` environment variable
+| Platform | Default path |
+|----------|------|
+| Windows  | `%APPDATA%/jf/config.json` |
+| macOS    | `~/Library/Application Support/jf/config.json` |
+| Linux    | `$XDG_CONFIG_HOME/jf/config.json` (default `~/.config/jf/config.json`) |
 
-### Config file format
+Override with `--config <path>` or `JF_CONFIG` env var.
 
-```json
+### Config schema
+
+```jsonc
 {
-  "active_profile": "home",
-  "profiles": {
-    "home": {
-      "host": "https://jf.home.example.com",
-      "username": "jonas",
-      "default_output": "table"
-    },
-    "nas": {
-      "host": "https://jf.nas.local:8096",
-      "username": "admin"
-    }
-  }
-}
-```
-
-Credentials file (separate):
-
-```json
-{
+  "defaultHost": "jf.home.example.com",
   "hosts": {
-    "https://jf.home.example.com": {
-      "token": "eyJhbGci...",
-      "username": "jonas",
-      "acquired": "2026-03-10T14:00:00Z"
+    "jf.home.example.com": {
+      "baseUrl": "https://jf.home.example.com",
+      "aliases": ["home", "jf"],
+      "defaultProfile": "main",
+      "profiles": {
+        "main": {
+          "token": "eyJhbGci...",
+          "username": "jonas",
+          "userId": "f692a3c1-..."
+        },
+        "admin": {
+          "apiKey": "abc123def456"
+        }
+      }
     },
-    "https://jf.nas.local:8096": {
-      "token": "abc123...",
-      "username": "admin",
-      "acquired": "2026-03-15T09:30:00Z"
+    "nas.local": {
+      "baseUrl": "https://nas.local:8096/jellyfin",
+      "aliases": ["nas"],
+      "defaultProfile": "admin",
+      "profiles": {
+        "admin": {
+          "token": "xyz789...",
+          "username": "admin"
+        }
+      }
     }
   }
 }
 ```
+
+Hosts are keyed by network hostname (lowercased). Profiles are nested under their host. Credentials live inside profile objects — there is no separate credentials file.
 
 ---
 
@@ -593,10 +602,10 @@ Credentials file (separate):
 
 | Variable | Maps to flag | Description |
 |---|---|---|
-| `JF_HOST` | `--host` | Jellyfin server URL |
+| `JF_SERVER` | `--server` | Jellyfin server (hostname, alias, or full URL) |
 | `JF_TOKEN` | (auth override) | Access token, bypasses credential store |
 | `JF_PROFILE` | `--profile` | Active profile name |
-| `JF_CONFIG_DIR` | | Override config directory |
+| `JF_CONFIG` | `--config` | Override config file path |
 | `JF_OUTPUT` | `--json` | Set to `json` for machine output |
 | `NO_COLOR` | `--no-color` | Disable ANSI formatting (standard, see no-color.org) |
 
@@ -621,8 +630,9 @@ These flags are reserved across the entire CLI and must not be repurposed by ind
 | `-v`, `--verbose` | Increase verbosity |
 | `-q`, `--quiet` | Suppress banners and prompts; fail if confirmation needed |
 | `--no-color` | Disable ANSI formatting |
-| `-H`, `--host` | Target server URL |
+| `-S`, `--server` | Target server (hostname, alias, or URL) |
 | `--profile` | Named profile |
+| `--config` | Config file path |
 
 Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--type`,
 `--sort-by`), but they must never shadow or redefine a reserved flag.
@@ -650,7 +660,7 @@ Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--
 {
   "error": "not_authenticated",
   "message": "Not authenticated for https://jf.example.com",
-  "recovery": "jf auth login --host https://jf.example.com"
+  "recovery": "jf auth login --server https://jf.example.com"
 }
 ```
 
@@ -805,7 +815,7 @@ prompt logic.
 
 ```bash
 # Log in to your home server
-jf auth login --host https://jf.home.example.com --username jonas
+jf auth login --server https://jf.home.example.com --username jonas
 
 # Check connection
 jf server ping
@@ -820,7 +830,7 @@ jf items get a1b2c3d4
 ### Example 2: CI/automation -- export all users as JSON
 
 ```bash
-export JF_HOST="https://jf.company.com"
+export JF_SERVER="https://jf.company.com"
 export JF_TOKEN="eyJhbGciOiJIUzI1NiJ9..."
 
 # List all users as JSON for processing
@@ -913,14 +923,23 @@ src/Jf.Cli/
         ProfilesListCommand.cs
         ProfilesUseCommand.cs
         ProfilesShowCommand.cs
+        ProfilesRenameCommand.cs
         ProfilesDeleteCommand.cs
+      Host/
+        HostListCommand.cs
+        HostUseCommand.cs
+        HostRenameCommand.cs
+        HostDeleteCommand.cs
+        Alias/
+          AliasAddCommand.cs
+          AliasRemoveCommand.cs
+          AliasListCommand.cs
       ApiKeys/
         ApiKeysListCommand.cs
         ApiKeysCreateCommand.cs
         ApiKeysDeleteCommand.cs
       AuthService.cs                   # Login flows, token validation
-      CredentialStore.cs               # Secure token storage
-      ProfileStore.cs                  # Profile CRUD
+      ConfigStore.cs                   # Unified config with host-keyed profiles
     Server/
       InfoCommand.cs
       PingCommand.cs
@@ -1153,7 +1172,25 @@ app.Configure(config =>
             profiles.AddCommand<ProfilesListCommand>("list");
             profiles.AddCommand<ProfilesUseCommand>("use");
             profiles.AddCommand<ProfilesShowCommand>("show");
+            profiles.AddCommand<ProfilesRenameCommand>("rename");
             profiles.AddCommand<ProfilesDeleteCommand>("delete");
+        });
+
+        auth.AddBranch("host", host =>
+        {
+            host.SetDescription("Manage configured hosts");
+            host.AddCommand<HostListCommand>("list");
+            host.AddCommand<HostUseCommand>("use");
+            host.AddCommand<HostRenameCommand>("rename");
+            host.AddCommand<HostDeleteCommand>("delete");
+
+            host.AddBranch("alias", alias =>
+            {
+                alias.SetDescription("Manage host aliases");
+                alias.AddCommand<AliasAddCommand>("add");
+                alias.AddCommand<AliasRemoveCommand>("remove");
+                alias.AddCommand<AliasListCommand>("list");
+            });
         });
 
         auth.AddBranch("api-keys", keys =>
@@ -1602,3 +1639,17 @@ adds complexity with near-zero repeat usage. If needed, `raw` covers it.
 These are low-frequency or niche features. InstantMix could be a future `jf items instant-mix`
 sub-command. Channels could live under a future `items channels` if demand warrants it. Keeping
 the top-level tree focused on high-frequency tasks prevents bloat.
+
+**Why hostname-keyed `hosts` instead of a flat `profiles` map?**
+The original design used a flat `profiles` map with a separate `credentials.json`. This works for
+single-server setups but breaks down with multiple servers: profile names collide, credentials are
+decoupled from profiles, and there is no natural place for per-server defaults. The hostname-keyed
+model groups profiles under their server, co-locates credentials, and enables zero-config for the
+common single-server case via single-entry inference. See `jf-cli-profile-system.md` for the full
+specification.
+
+**Why `--server` instead of `--host`?**
+The generic CLI pattern in `references/ux-dx.md` uses `--host`, which is appropriate when the value
+is always a network hostname. This CLI accepts a full URL, a bare hostname, or an alias — so
+`--server` more accurately describes what the flag accepts. The short flag is `-S` (not `-H`) to
+match.
