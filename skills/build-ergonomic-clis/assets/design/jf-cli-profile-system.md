@@ -26,14 +26,14 @@
 
 > **Related documents:** For the broader CLI design (command tree, output modes, exit codes), see [`jf-cli-design.md`](jf-cli-design.md). For generic self-hosted service patterns (target identity modes, inference, migration, diagnostics), see [`../../references/service-cli-patterns.md`](../../references/service-cli-patterns.md).
  
-The profile system allows the CLI to manage credentials for multiple Jellyfin servers and multiple accounts per server. Profiles are organized by hostname key (lowercased hostname), with a two-level resolution chain: first resolve the host, then resolve the profile within that host.
+The profile system allows the CLI to manage credentials for multiple Jellyfin servers and multiple accounts per server. Profiles are organized by hostname key (lowercased hostname; IP addresses supported), with a two-level resolution chain: first resolve the host, then resolve the profile within that host.
  
 ### Design Principles
  
 - **Hostname-keyed**: Hosts are identified by their network hostname (or IP address) (e.g. `nas.local`, `jf.home.example.com`, `192.168.1.50`). This provides short, human-readable identifiers.
 - **Base URL inheritance**: Each host declares a `baseUrl`. Profiles inherit it by default but may override it (e.g. different port or path on the same hostname).
 - **Profile names are unique per host, not globally**. Two hosts may each have a profile named `admin`.
-- **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname key (lowercased hostname) + profile.
+- **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname key (lowercased hostname; IP addresses supported) + profile.
 - **Zero-config default**: A single server with a single profile requires no flags or env vars — it just works.
 - **Optional hostname aliases**: Each host may declare short aliases (e.g. `home`, `nas`). Aliases are not globally unique — multiple hosts may share an alias — but the CLI warns on ambiguity.
  
@@ -55,7 +55,7 @@ Overridable with `--config <PATH>` or `JF_CONFIG` env var.
 
 ```jsonc
 {
-  // Hostname key (lowercased hostname) of the default server. Must be a key in "hosts".
+  // Hostname key (lowercased hostname; IP addresses supported) of the default server. Must be a key in "hosts".
   "defaultHost": "<hostnameKey>",
 
   "hosts": {
@@ -153,7 +153,7 @@ Legacy note: `credentials.json` is treated as a legacy format to migrate away fr
 | Field | Required | Description |
 |-------|----------|-------------|
 | `defaultHost` | No | Hostname key of the default server. If absent and multiple hosts exist, requires explicit `--server` or `JF_SERVER` (single-host inference still applies). |
-| `hosts` | Yes | Map of hostname key (lowercased hostname) → host object. |
+| `hosts` | Yes | Map of hostname key (lowercased hostname; IP addresses supported) → host object. |
 | `hosts[].baseUrl` | Yes | Default base URL for all profiles under this host. |
 | `hosts[].aliases` | No | List of short aliases for this host. Non-unique across hosts. Used during host lookup. |
 | `hosts[].defaultProfile` | No | Default profile name for this host. If absent: inferred if there is exactly one profile, otherwise error. |
@@ -175,7 +175,7 @@ Evaluated in order, first match wins:
  
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--server <VALUE>` flag | If a full URL (or scheme-less `host:port`): extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname or alias: see lookup order below. |
+| 1 | `--server <VALUE>` flag | If a full URL (or scheme-less `host:port`): extract hostname for lookup, use the URL as runtime `baseUrl` override (see §3.3). If a bare hostname (or IP address) or alias: see lookup order below. |
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
@@ -188,7 +188,7 @@ Evaluated in order, first match wins:
 - Select `profileName` from `--profile`/`JF_PROFILE`, or default to `"default"`.
 - Do not read or write config and do not touch the secret store.
 
-**Lookup order for a bare hostname/alias value:**
+**Lookup order for a bare hostname/IP/alias value:**
 
 1. Exact match against `hosts` keys (hostname). If found, use it — alias scan is skipped entirely, even if another host has a matching alias.
 2. Alias match: scan all hosts for one whose `aliases` array contains the value.
@@ -258,7 +258,7 @@ When `--server` or `JF_SERVER` provides a full URL, the hostname is extracted fo
 | `http://192.168.1.50:8096` | `192.168.1.50` |
 | `nas.local` (bare) | `nas.local` |
  
-Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent). If parsing fails because the input has no scheme, treat the input as a bare hostname (and if it looks like `host:port`, first add a default scheme before parsing).
+Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent). If parsing fails because the input has no scheme, treat the input as a bare hostname/IP (and if it looks like `host:port`, first add a default scheme before parsing).
 
 Port and path are **not** part of the hostname key. They are preserved only in `baseUrl`.
 
@@ -270,7 +270,7 @@ The hostname key is derived with these rules:
 
 - Trim whitespace.
 - If the input looks like a URL, parse it and extract `.hostname`.
-- Otherwise treat the input as a bare hostname.
+- Otherwise treat the input as a bare hostname/IP.
 - Lowercase the hostname for the identity key.
 - Do not include scheme, port, path, query, or fragment in the identity key.
 
@@ -286,7 +286,7 @@ The effective base URL used for network calls is derived separately:
 resolve(serverArg, profileArg):
   hostInput = serverArg ?? env.JF_SERVER ?? config.defaultHost ?? singleHostOrError()
 
-  // Host lookup uses the hostname key (lowercased hostname).
+  // Host lookup uses the hostname key (lowercased hostname; IP addresses supported).
   // If the input is scheme-less host:port, treat it as URL-like by adding a default scheme first.
   urlInput = withDefaultSchemeIfNeeded(hostInput)
   hostnameKey =
@@ -335,7 +335,7 @@ jf auth login [--server <VALUE>] [--profile <NAME>] [--username <USER>] [--passw
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--server` | Only if a server cannot be resolved | Server URL (or scheme-less `host:port`) when creating a new host entry. For existing hosts, this flag may also be a bare hostname or alias (uses stored `baseUrl` unless a full URL is supplied for login; if it differs, it may be saved as a profile-level `baseUrl` override). |
+| `--server` | Only if a server cannot be resolved | Server URL (or scheme-less `host:port`) when creating a new host entry. For existing hosts, this flag may also be a bare hostname (or IP address) or alias (uses stored `baseUrl` unless a full URL is supplied for login; if it differs, it may be saved as a profile-level `baseUrl` override). |
 | `--profile` | No | Profile name. Default: for existing hosts, follows standard profile resolution (§3.2). When creating a new host entry, prompts in human mode when a TTY is present; otherwise uses `"default"` (including in machine output modes). |
 | `--username` | No | Username for password-based login. If absent, prompts in human mode when TTY is present. Required in `--json` mode (no prompts). |
 | `--password-stdin` | No | Read password from stdin (non-interactive). Required in `--json` mode for password-based login (no prompts). |
@@ -599,7 +599,7 @@ These flags are available on all commands, not just `auth`:
  
 | Flag | Env Var | Description |
 |------|---------|-------------|
-| `--server <VALUE>` | `JF_SERVER` | Hostname, alias, scheme-less `host:port`, or full URL to select/override the target server. |
+| `--server <VALUE>` | `JF_SERVER` | Hostname (or IP address), alias, scheme-less `host:port`, or full URL to select/override the target server. |
 | `--profile <NAME>` | `JF_PROFILE` | Profile name to use on the resolved host. |
 | `--config <PATH>` | `JF_CONFIG` | Path to config file (overrides default location). |
 | `--json` | `JF_OUTPUT` | Output the versioned JSON envelope contract to stdout (non-interactive). |
@@ -703,7 +703,7 @@ The CLI uses atomic file writes (write to temp file, then rename) to prevent cor
  
 | Variable | Description | Equivalent Flag |
 |----------|-------------|-----------------|
-| `JF_SERVER` | Default server hostname, alias, scheme-less `host:port`, or URL | `--server` |
+| `JF_SERVER` | Default server hostname (or IP address), alias, scheme-less `host:port`, or URL | `--server` |
 | `JF_PROFILE` | Default profile name | `--profile` |
 | `JF_CONFIG` | Config file path | `--config` |
 | `JF_TOKEN` | Access token override (bypasses secret store) | *(auth override)* |

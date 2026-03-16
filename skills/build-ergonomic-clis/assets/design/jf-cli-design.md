@@ -50,7 +50,7 @@ Organized by user-facing domain, not by API controller tags.
 This worked example explicitly chooses:
 
 - **CLI class:** service-native
-- **Target identity mode:** hostname key (lowercased hostname)
+- **Target identity mode:** hostname key (lowercased hostname; IP addresses supported)
 - **Machine contract style:** envelope JSON on stdout when `--json` is used, with `meta.schemaVersion = 1`
 - **Secret storage:** separate secret store (OS credential store / keyring) preferred
 - **Confirmation refusal:** exit `2` when interaction is required but forbidden (`--quiet` / non-TTY)
@@ -387,7 +387,7 @@ These flags are available on every command via `GlobalSettings`:
 
 | Flag | Short | Type | Description |
 |---|---|---|---|
-| `--server <VALUE>` | `-S` | string | Hostname, alias, scheme-less `host:port`, or full URL of the target Jellyfin server |
+| `--server <VALUE>` | `-S` | string | Hostname (or IP address), alias, scheme-less `host:port`, or full URL of the target Jellyfin server |
 | `--profile <NAME>` | | string | Use a named profile on the resolved host (host-scoped; not globally unique) |
 | `--config <PATH>` | | string | Path to config file (overrides default location) |
 | `--json` | | bool | Output stable machine-readable JSON to stdout |
@@ -399,7 +399,7 @@ These flags are available on every command via `GlobalSettings`:
 | `--help` | `-h` | bool | Show help (Spectre built-in) |
 | `--version` | `-V` | bool | Show version (Spectre built-in) |
 
-**Note**: The generic pattern in `references/service-cli-patterns.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a scheme-less `host:port`, a bare hostname, or an alias — not strictly a hostname.
+**Note**: The generic pattern in `references/service-cli-patterns.md` uses `--host`. This CLI uses `--server` because the value can be a full URL, a scheme-less `host:port`, a bare hostname (or IP address), or an alias — not strictly a hostname.
 
 **Note**: This CLI intentionally avoids a global “force” flag. Use `--dry-run` to preview and `--yes` to bypass destructive confirmations.
 
@@ -407,7 +407,7 @@ These flags are available on every command via `GlobalSettings`:
 public class GlobalSettings : CommandSettings
 {
     [CommandOption("-S|--server <VALUE>")]
-    [Description("Jellyfin server (hostname, alias, scheme-less host:port, or full URL)")]
+    [Description("Jellyfin server (hostname or IP address, alias, scheme-less host:port, or full URL)")]
     public string? Server { get; set; }
 
     [CommandOption("--profile <NAME>")]
@@ -522,7 +522,7 @@ The CLI never opens a login prompt from a non-auth command. Ever.
 
 - Non-secret profile metadata lives in `config.json`.
 - Credentials (tokens, API keys) are stored in a separate secret store (OS credential store / keyring / external helper), keyed by:
-  - hostname key (lowercased hostname)
+  - hostname key (lowercased hostname; IP addresses supported)
   - profile name (within that host)
   - credential kind (`token` or `apiKey`)
 - Fallback (allowed but discouraged): a separate secrets file with strict permissions and explicit redaction rules. Do not inline secrets in `config.json`.
@@ -626,7 +626,7 @@ Override with `--config <PATH>` or `JF_CONFIG` env var.
 }
 ```
 
-Hosts are keyed by network hostname (lowercased). Profiles are nested under their host and may optionally override the host `baseUrl`. Credentials live in the secret store; `authKind` declares what is stored for the profile.
+Hosts are keyed by network hostname (or IP address); the key is lowercased for normalization. Profiles are nested under their host and may optionally override the host `baseUrl`. Credentials live in the secret store; `authKind` declares what is stored for the profile.
 
 ---
 
@@ -634,7 +634,7 @@ Hosts are keyed by network hostname (lowercased). Profiles are nested under thei
 
 | Variable | Maps to flag | Description |
 |---|---|---|
-| `JF_SERVER` | `--server` | Jellyfin server (hostname, alias, scheme-less `host:port`, or full URL) |
+| `JF_SERVER` | `--server` | Jellyfin server (hostname or IP address, alias, scheme-less `host:port`, or full URL) |
 | `JF_TOKEN` | (auth override) | Access token override, bypasses the secret store |
 | `JF_PROFILE` | `--profile` | Profile name override for the resolved host |
 | `JF_CONFIG` | `--config` | Override config file path |
@@ -663,7 +663,7 @@ These flags are reserved across the entire CLI and must not be repurposed by ind
 | `-v`, `--verbose` | Increase verbosity |
 | `-q`, `--quiet` | Suppress banners and prompts; fail if confirmation needed |
 | `--no-color` | Disable ANSI formatting |
-| `-S`, `--server` | Target server (hostname, alias, scheme-less `host:port`, or full URL) |
+| `-S`, `--server` | Target server (hostname or IP address, alias, scheme-less `host:port`, or full URL) |
 | `--profile` | Profile name on the resolved host |
 | `--config` | Config file path |
 
@@ -1702,6 +1702,6 @@ specification.
 
 **Why `--server` instead of `--host`?**
 The generic CLI pattern in `references/service-cli-patterns.md` uses `--host`, which is appropriate when the value
-is always a network hostname. This CLI accepts a full URL, a bare hostname, or an alias — so
+is always a network hostname. This CLI accepts a full URL, a bare hostname (or IP address), or an alias — so
 `--server` more accurately describes what the flag accepts. The short flag is `-S` (not `-H`) to
 match.

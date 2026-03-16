@@ -21,7 +21,7 @@ For browser-capable service CLIs:
 - Prefer system browser plus PKCE or a service-native device/quick-connect flow.
 - Fall back to pasted tokens only when the service actually uses them.
 - In resolved machine output modes (selected via flags/env/config/profile defaults; for example: `--json`, `--output json`, `--porcelain=v1`), never auto-launch a browser or show interactive prompts. If auth would require user interaction (browser/device/quick-connect), refuse (exit `2`) and require a truly non-interactive alternative (for example: token via stdin) or instruct re-running in human mode (for example: pass `--output human` / `--no-json`, ensure stdin and stderr are TTYs, and remove `--quiet`; note that env/config/profile defaults may still force machine output unless overridden by flags).
-- Treat `--quiet` as non-interactive even in human output modes: never initiate browser/device/quick-connect flows when `--quiet` is set. Refuse (exit `2`) with a non-interactive alternative or an instruction to re-run without `--quiet`.
+- Treat `--quiet` as non-interactive even in human output modes: never prompt and never initiate browser/device/quick-connect flows when `--quiet` is set. Refuse (exit `2`) with a non-interactive alternative or an instruction to re-run without `--quiet`.
 - Treat `--output human` / `--no-json` as mutually exclusive with machine selectors (`--json`, `--output json`, porcelain selectors). If combined, refuse (exit `2`) with an actionable error.
 
 For API-token-based CLIs:
@@ -302,7 +302,7 @@ Non-HTTP example:
 
 - Do not store plaintext secrets in general config stores unless explicitly chosen and documented.
 - Do not log raw `Authorization`, cookies, tokens, or token-bearing CLI args in diagnostics.
-- Do not prompt unless stdin and stderr are attached to a terminal *and* the CLI is in a human output mode. Machine output modes never prompt; do not use `--quiet` as your only guard — also gate prompting on resolved output mode + TTY.
+- Only prompt when the resolved output mode is human, `--quiet` is not set, and stdin and stderr are attached to a terminal; otherwise refuse (exit `2`). Machine output modes never prompt.
 - Do not silently pick the first matching profile when multiple profiles match a target; require `--profile` or a default mapping.
 
 ## Service CLI Design Checklist Additions

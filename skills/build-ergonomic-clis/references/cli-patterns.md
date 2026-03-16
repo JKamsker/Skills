@@ -117,7 +117,7 @@ Bad patterns:
 Rules:
 
 - When the **resolved output mode** is a machine output mode (selected via `--json`, `--output json`, porcelain selectors, or env/config/profile defaults), the CLI is non-interactive: no prompts, no browser launches, no banners.
-- If an interactive step would be required in a machine output mode, refuse (exit `2`) with an actionable message pointing to a non-interactive alternative, or to re-running in human mode (`--output human` / `--no-json`) with stdin+stderr TTYs (and without `--quiet`).
+- If an interactive step would be required in a machine output mode, refuse (exit `2`) with an actionable message pointing to a non-interactive alternative, or to re-running in human mode (`--output human` / `--no-json`) with stdin+stderr TTYs (and without `--quiet`). In envelope/porcelain modes, encode the refusal as a machine error payload; in direct-value modes, keep stdout value-only and use stderr + exit `2`.
 - If an interactive step would be required but the tool is in `--quiet` mode, fail (exit `2`) with an actionable message:
   - For destructive confirmation prompts: suggest `--dry-run` to inspect first or `--yes` to explicitly confirm.
   - For other interactive prompts (auth/device/browser/selection): suggest the explicit non-interactive alternative (stdin/device/token flag) or re-running without `--quiet` in human mode.
@@ -163,14 +163,16 @@ If contract style is command-specific, each affected command must document its s
 Machine contracts must be versioned:
 
 - In-band: `meta.schemaVersion = 1`
-- Selector: `--porcelain=v1`, `--format-version 1`, `--output json-v1`
+- Porcelain/envelope selector (envelope metadata + structured error payload): `--porcelain=v1`
+- Direct-value selector (value-only stdout JSON): `--format-version 1`, `--output json-v1`
 
-Pick one selector surface. If you ship compatibility aliases, document equivalence and treat disagreements as a usage error (exit `2`).
+Pick one selector surface per contract family. If you ship compatibility aliases within a family, document equivalence and treat disagreements as a usage error (exit `2`). Mixing families (for example: `--porcelain=v1` plus `--output json-v1`) is incompatible unless explicitly defined.
 
 If the machine output is a **direct-value contract** (arrays/scalars/JSONL), versioning usually cannot be carried in-band. Prefer an explicit selector:
 
-- `--porcelain=v1` (recommended for commands that need structured errors)
 - `--format-version 1` or `--output json-v1` (recommended for value-only JSON output)
+
+If a value-only command needs structured errors/metadata, provide a separate porcelain/envelope mode (e.g. `--porcelain=v1`) instead of silently changing the direct-value contract.
 
 If the CLI also provides a convenience flag like `--json`, define it precisely (e.g. "`--json` selects the default stable machine contract version, currently v1") so scripts can rely on it.
 
@@ -235,7 +237,7 @@ Output resolution precedence (recommended):
 
 - Output flags/selectors (`--output …`, `--json`, `--porcelain=…`, `--format-version …`) win over env/config/profile defaults.
 - Env vars win over config/profile defaults.
-- If multiple explicit selectors are incompatible (e.g. `--output human` plus `--porcelain=v1`, or `--format-version 2` plus `--output json-v1`), refuse (exit `2`) with an actionable message.
+- If multiple explicit selectors are incompatible (e.g. `--output human` plus `--porcelain=v1`, `--porcelain=v1` plus `--output json-v1`, or `--format-version 2` plus `--output json-v1`), refuse (exit `2`) with an actionable message.
 - If `--json` is combined with an explicit machine selector (`--porcelain=v1`, `--format-version 1`, `--output json-v1`), the explicit machine selector wins.
 - If a human selector (`--output human` / `--no-json`) is combined with any machine selector, refuse (exit `2`) with an actionable message.
 - If you support multiple machine selector surfaces as compatibility aliases, allow combinations only when they resolve to the same contract; otherwise refuse (exit `2`).

@@ -2,6 +2,7 @@ using Spectre.Console.Cli;
 using System;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -28,7 +29,7 @@ public sealed class CliException : Exception
 
 public sealed record JsonMeta(
     int SchemaVersion,
-    string? DiagnosticLogPath = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? DiagnosticLogPath = null);
 
 public sealed record JsonError(
     string Kind,
