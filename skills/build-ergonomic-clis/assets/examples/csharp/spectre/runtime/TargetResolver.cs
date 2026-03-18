@@ -16,38 +16,58 @@ public enum AuthSource
     Profile,
 }
 
+public enum ResolutionSource
+{
+    Default,
+    Flag,
+    Environment,
+    TargetDefault,
+    SingleMatch,
+    ActiveProfile,
+    ProfileConfig,
+}
+
 public sealed record ProfileConfig(
     string? Hostname = null,
     string? BaseUrl = null);
 
 public sealed record ResolvedContext(
     string BaseUrl,
+    ResolutionSource BaseUrlSource,
     string TargetIdentityKey,
     string Profile,
+    ResolutionSource ProfileSource,
     [property: JsonIgnore] string? Token,
     AuthSource AuthSource,
-    OutputMode OutputMode)
+    OutputMode OutputMode,
+    ResolutionSource OutputModeSource)
 {
     public override string ToString()
-        => $"ResolvedContext {{ BaseUrl = {BaseUrl}, TargetIdentityKey = {TargetIdentityKey}, Profile = {Profile}, Token = REDACTED, AuthSource = {AuthSource}, OutputMode = {OutputMode} }}";
+        => $"ResolvedContext {{ BaseUrl = {BaseUrl}, BaseUrlSource = {BaseUrlSource}, TargetIdentityKey = {TargetIdentityKey}, Profile = {Profile}, ProfileSource = {ProfileSource}, Token = REDACTED, AuthSource = {AuthSource}, OutputMode = {OutputMode}, OutputModeSource = {OutputModeSource} }}";
 }
 
 public sealed record ResolvedContextSafe(
     string BaseUrl,
+    ResolutionSource BaseUrlSource,
     string TargetIdentityKey,
     string Profile,
+    ResolutionSource ProfileSource,
     AuthSource AuthSource,
-    OutputMode OutputMode);
+    OutputMode OutputMode,
+    ResolutionSource OutputModeSource);
 
 public static class ResolvedContextExtensions
 {
     public static ResolvedContextSafe ToSafe(this ResolvedContext context)
         => new(
             BaseUrl: context.BaseUrl,
+            BaseUrlSource: context.BaseUrlSource,
             TargetIdentityKey: context.TargetIdentityKey,
             Profile: context.Profile,
+            ProfileSource: context.ProfileSource,
             AuthSource: context.AuthSource,
-            OutputMode: context.OutputMode);
+            OutputMode: context.OutputMode,
+            OutputModeSource: context.OutputModeSource);
 }
 
 public interface IProfileStore
@@ -75,32 +95,43 @@ public sealed class TargetResolver
 
     public ResolvedContext Resolve(GlobalOptions options)
     {
-        var explicitProfile = FirstNonEmpty(
-            options.Profile,
-            Environment.GetEnvironmentVariable("EXAMPLE_PROFILE"));
+        var (explicitProfile, explicitProfileSource) = FirstNonEmpty(
+            (options.Profile, ResolutionSource.Flag),
+            (Environment.GetEnvironmentVariable("EXAMPLE_PROFILE"), ResolutionSource.Environment));
 
-        var explicitBaseUrl = FirstNonEmpty(
-            options.Host,
-            Environment.GetEnvironmentVariable("EXAMPLE_HOST"));
+        var (explicitBaseUrl, explicitBaseUrlSource) = FirstNonEmpty(
+            (options.Host, ResolutionSource.Flag),
+            (Environment.GetEnvironmentVariable("EXAMPLE_HOST"), ResolutionSource.Environment));
 
         explicitBaseUrl = explicitBaseUrl is null ? null : NormalizeBaseUrl(explicitBaseUrl);
         var explicitTargetKey = explicitBaseUrl is null ? null : DeriveHostnameIdentityKey(explicitBaseUrl);
 
-        string? profileName = explicitProfile
-            ?? SelectProfileForTarget(explicitTargetKey);
+        var (profileName, profileSource) = explicitProfile is not null
+            ? (explicitProfile, explicitProfileSource ?? ResolutionSource.Flag)
+            : SelectProfileForTarget(explicitTargetKey);
 
         if (profileName is null && explicitTargetKey is not null && !string.IsNullOrWhiteSpace(_profiles.ActiveProfile))
         {
             _profiles.Profiles.TryGetValue(_profiles.ActiveProfile!, out var activeProfile);
             var activeProfileTargetKey = ProfileTargetKey(activeProfile);
             if (activeProfileTargetKey == explicitTargetKey)
+            {
                 profileName = _profiles.ActiveProfile;
+                profileSource = ResolutionSource.ActiveProfile;
+            }
         }
 
         if (profileName is null && explicitTargetKey is null)
+        {
             profileName = _profiles.ActiveProfile;
+            profileSource = _profiles.ActiveProfile is null ? profileSource : ResolutionSource.ActiveProfile;
+        }
 
-        profileName ??= "default";
+        if (profileName is null)
+        {
+            profileName = "default";
+            profileSource = ResolutionSource.Default;
+        }
 
         _profiles.Profiles.TryGetValue(profileName, out var profile);
         if (profile is not null && !string.IsNullOrWhiteSpace(profile.BaseUrl) && !string.IsNullOrWhiteSpace(profile.Hostname))
@@ -117,13 +148,16 @@ public sealed class TargetResolver
             throw CliException.Usage($"Profile '{profileName}' is configured for '{profileTargetKey}', but the target is '{explicitTargetKey}'.");
 
         string resolvedBaseUrl;
+        ResolutionSource resolvedBaseUrlSource;
         if (explicitBaseUrl is not null)
         {
             resolvedBaseUrl = explicitBaseUrl;
+            resolvedBaseUrlSource = explicitBaseUrlSource ?? ResolutionSource.Flag;
         }
         else if (!string.IsNullOrWhiteSpace(profile?.BaseUrl))
         {
             resolvedBaseUrl = NormalizeBaseUrl(profile!.BaseUrl!);
+            resolvedBaseUrlSource = ResolutionSource.ProfileConfig;
         }
         else
         {
@@ -148,20 +182,23 @@ public sealed class TargetResolver
 
         return new ResolvedContext(
             BaseUrl: resolvedBaseUrl,
+            BaseUrlSource: resolvedBaseUrlSource,
             TargetIdentityKey: targetIdentityKey,
             Profile: profileName,
+            ProfileSource: profileSource,
             Token: token,
             AuthSource: authSource,
-            OutputMode: options.OutputMode);
+            OutputMode: options.OutputMode,
+            OutputModeSource: options.Json ? ResolutionSource.Flag : ResolutionSource.Default);
     }
 
-    private string? SelectProfileForTarget(string? explicitTargetKey)
+    private (string? ProfileName, ResolutionSource Source) SelectProfileForTarget(string? explicitTargetKey)
     {
         if (explicitTargetKey is null)
-            return null;
+            return (null, ResolutionSource.Default);
 
         if (_profiles.TargetDefaults.TryGetValue(explicitTargetKey, out var profileName))
-            return profileName;
+            return (profileName, ResolutionSource.TargetDefault);
 
         var matchingProfiles = _profiles.Profiles
             .Where(pair =>
@@ -174,8 +211,8 @@ public sealed class TargetResolver
 
         return matchingProfiles.Length switch
         {
-            0 => null,
-            1 => matchingProfiles[0],
+            0 => (null, ResolutionSource.Default),
+            1 => (matchingProfiles[0], ResolutionSource.SingleMatch),
             _ => throw CliException.Usage(
                 $"Multiple profiles match '{explicitTargetKey}'. Pass --profile or define a target default."),
         };
@@ -240,8 +277,14 @@ public sealed class TargetResolver
         return null;
     }
 
-    private static string? FirstNonEmpty(params string?[] candidates)
+    private static (string? Value, ResolutionSource? Source) FirstNonEmpty(params (string? Value, ResolutionSource Source)[] candidates)
     {
-        return candidates.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+        foreach (var candidate in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(candidate.Value))
+                return (candidate.Value, candidate.Source);
+        }
+
+        return (null, null);
     }
 }

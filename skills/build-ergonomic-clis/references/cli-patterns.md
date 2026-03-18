@@ -121,7 +121,7 @@ Rules:
 - If an interactive step would be required but the tool is in `--quiet` mode, fail (exit `2`) with an actionable message:
   - For destructive confirmation prompts: suggest `--dry-run` to inspect first or `--yes` to explicitly confirm.
   - For other interactive prompts (auth/device/browser/selection): suggest the explicit non-interactive alternative (stdin/device/token flag) or re-running without `--quiet` in human mode.
-- If a command supports interactive prompts, only do so when the resolved output mode is human, `--quiet` is not set, and stdin and stderr are TTYs. If a prompt would be required but those conditions are not met, refuse (exit `2`) with an actionable message.
+- If a command supports interactive prompts, only do so when the resolved output mode is human, `--quiet` is not set, and stdin and stderr are TTYs. Raw-byte stdout modes are not human modes; if stdout is reserved for bytes, refuse instead of prompting. If a prompt would be required but those conditions are not met, refuse (exit `2`) with an actionable message.
 - Prompt on stderr, not stdout.
 - Secret prompts must not echo.
 
@@ -230,7 +230,7 @@ Treat human and machine output as separate contracts.
 - In machine modes:
   - For envelope-style contracts, avoid ad hoc stderr noise (banners/progress/warnings); prefer structured warnings/diagnostic paths inside machine metadata.
   - For direct-value/pipeline contracts, stderr remains the channel for warnings and errors; keep stdout value-only.
-  - For raw-byte stdout modes, keep stdout byte-only; route prompts, banners, progress, warnings, and diagnostic hints to stderr or disable them entirely.
+  - For raw-byte stdout modes, keep stdout byte-only and treat the mode as non-interactive. Disable prompts entirely; route banners/progress/warnings/diagnostic hints to stderr or suppress them according to policy.
 - Redact secrets in human output and config dumps.
 - Use explicit exit codes for common failure classes.
 

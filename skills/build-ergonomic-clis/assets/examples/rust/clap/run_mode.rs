@@ -10,6 +10,8 @@ pub enum OutputFormat {
     Json,
     /// Machine output (JSON, compact). Raw bytes remain a separate non-machine mode; see `write_raw_bytes`.
     JsonCompact,
+    /// Raw bytes on stdout. This mode is non-human and must not prompt.
+    RawBytes,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -96,13 +98,20 @@ pub fn confirm_or_abort(
     if matches!(mode.output, OutputFormat::Json | OutputFormat::JsonCompact) {
         let mut error = CliError {
             exit: ExitCategory::Usage,
-            message:
-                "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes (for example: --json / --output json / --output json-compact)."
+            message: "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes."
                 .to_string(),
             already_rendered: false,
         };
         write_error(&mut error, mode.output)?;
         return Err(error);
+    }
+
+    if matches!(mode.output, OutputFormat::RawBytes) {
+        return Err(CliError {
+            exit: ExitCategory::Usage,
+            message: "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled when stdout is reserved for raw bytes.".to_string(),
+            already_rendered: false,
+        });
     }
 
     if mode.quiet || !io::stdin().is_terminal() || !io::stderr().is_terminal() {
@@ -141,6 +150,13 @@ pub fn write_value<T: Serialize>(value: &T, format: OutputFormat) -> Result<(), 
             let value = serde_json::to_value(value).map_err(json_error)?;
             write_tableish_value(&value)?;
         }
+        OutputFormat::RawBytes => {
+            return Err(CliError {
+                exit: ExitCategory::Usage,
+                message: "structured values cannot be emitted while raw-byte stdout is selected".to_string(),
+                already_rendered: false,
+            });
+        }
     }
 
     Ok(())
@@ -159,7 +175,7 @@ pub fn write_error(error: &mut CliError, format: OutputFormat) -> Result<(), Cli
             };
             write_json_envelope(Value::Null, Some(json_error), format)?;
         }
-        OutputFormat::Table => {
+        OutputFormat::Table | OutputFormat::RawBytes => {
             eprintln!("Error: {}", error.message);
         }
     }
@@ -168,7 +184,15 @@ pub fn write_error(error: &mut CliError, format: OutputFormat) -> Result<(), Cli
     Ok(())
 }
 
-pub fn write_raw_bytes(bytes: &[u8]) -> Result<(), CliError> {
+pub fn write_raw_bytes(bytes: &[u8], format: OutputFormat) -> Result<(), CliError> {
+    if !matches!(format, OutputFormat::RawBytes) {
+        return Err(CliError {
+            exit: ExitCategory::Usage,
+            message: "raw-byte stdout requires selecting the raw-bytes output mode".to_string(),
+            already_rendered: false,
+        });
+    }
+
     let mut stdout = io::stdout().lock();
     stdout.write_all(bytes).map_err(io_error)?;
     Ok(())
@@ -255,7 +279,7 @@ fn write_json_envelope<T: Serialize>(
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&envelope).map_err(json_error)?),
         OutputFormat::JsonCompact => println!("{}", serde_json::to_string(&envelope).map_err(json_error)?),
-        OutputFormat::Table => unreachable!("table output does not use JSON envelopes"),
+        OutputFormat::Table | OutputFormat::RawBytes => unreachable!("non-JSON output does not use JSON envelopes"),
     }
 
     Ok(())

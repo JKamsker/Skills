@@ -33,7 +33,7 @@ The profile system allows the CLI to manage credentials for multiple Jellyfin se
 - **Hostname-keyed**: Hosts are identified by their network hostname (or IP address) (e.g. `nas.local`, `jf.home.example.com`, `192.168.1.50`). This provides short, human-readable identifiers.
 - **Base URL inheritance**: Each host declares a `baseUrl`. Profiles inherit it by default but may override it (e.g. different port or path on the same hostname).
 - **Profile names are unique per host, not globally**. Two hosts may each have a profile named `admin`.
-- **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname key (lowercased hostname; IP addresses supported) + profile.
+- **Secrets are stored separately**: Config stores non-secret metadata; tokens/API keys live in a separate secret store keyed by hostname key (lowercased hostname; IP addresses supported) + profile + credential kind.
 - **Zero-config default**: A single server with a single profile requires no flags or env vars — it just works.
 - **Optional hostname aliases**: Each host may declare short aliases (e.g. `home`, `nas`). Aliases are not globally unique — multiple hosts may share an alias — but the CLI warns on ambiguity.
  
@@ -100,7 +100,7 @@ Recommended keying model:
 - `jf:cred:{hostKey}:{profile}:token`
 - `jf:cred:{hostKey}:{profile}:apiKey`
 
-Where `{hostKey}` is the **host key** (lowercased hostname; IP addresses supported) and `{profile}` is the profile name within that host.
+Where `{hostKey}` is the **hostname key** (lowercased hostname; IP addresses supported) and `{profile}` is the profile name within that host.
 
 Fallback (allowed but discouraged): a separate secrets file (e.g. `secrets.json`) with strict permissions and explicit redaction rules. If this fallback is used, it must be clearly labeled as a tradeoff in docs and help.
 

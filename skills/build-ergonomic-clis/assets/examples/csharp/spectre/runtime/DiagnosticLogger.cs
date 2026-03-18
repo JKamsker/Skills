@@ -24,9 +24,13 @@ public sealed class DiagnosticLogger
             var path = CreateLogPath();
             var builder = BuildBaseLog(operation, exception);
             builder.AppendLine($"BaseUrl: {SecretRedactor.RedactPotentialSecrets(context.BaseUrl)}");
+            builder.AppendLine($"BaseUrlSource: {context.BaseUrlSource}");
             builder.AppendLine($"TargetIdentityKey: {context.TargetIdentityKey}");
             builder.AppendLine($"Profile: {context.Profile}");
+            builder.AppendLine($"ProfileSource: {context.ProfileSource}");
             builder.AppendLine($"AuthSource: {context.AuthSource}");
+            builder.AppendLine($"OutputMode: {context.OutputMode}");
+            builder.AppendLine($"OutputModeSource: {context.OutputModeSource}");
             AppendExchange(builder, exchange);
             File.WriteAllText(path, builder.ToString());
             return path;
@@ -104,14 +108,32 @@ public sealed class DiagnosticLogger
 
         try
         {
-            await content.LoadIntoBufferAsync(MaxBodyPreviewBytes);
-            var body = await content.ReadAsStringAsync(cancellationToken);
+            using var stream = await content.ReadAsStreamAsync(cancellationToken);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[8192];
+            var remaining = MaxBodyPreviewBytes + 1;
+            while (remaining > 0)
+            {
+                var read = await stream.ReadAsync(chunk.AsMemory(0, Math.Min(chunk.Length, remaining)), cancellationToken);
+                if (read == 0)
+                    break;
+
+                buffer.Write(chunk, 0, read);
+                remaining -= read;
+            }
+
+            var bytes = buffer.ToArray();
+            var truncated = bytes.Length > MaxBodyPreviewBytes;
+            if (truncated)
+                bytes = bytes[..MaxBodyPreviewBytes];
+
+            var body = ResolveEncoding(content).GetString(bytes);
             var redacted = SecretRedactor.RedactPotentialSecrets(body) ?? string.Empty;
-            return Truncate(redacted, MaxBodyPreviewBytes);
+            return truncated ? $"{Truncate(redacted, MaxBodyPreviewBytes)}...(truncated to 64 KB)" : redacted;
         }
         catch
         {
-            return "(body preview unavailable or exceeds 64 KB)";
+            return "(body preview unavailable)";
         }
     }
 
@@ -215,5 +237,18 @@ public sealed class DiagnosticLogger
             return value;
 
         return $"{value[..maxLength]}...(truncated)";
+    }
+
+    private static Encoding ResolveEncoding(HttpContent content)
+    {
+        try
+        {
+            var charset = content.Headers.ContentType?.CharSet;
+            return string.IsNullOrWhiteSpace(charset) ? Encoding.UTF8 : Encoding.GetEncoding(charset);
+        }
+        catch
+        {
+            return Encoding.UTF8;
+        }
     }
 }

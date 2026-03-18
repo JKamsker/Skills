@@ -214,9 +214,15 @@ pub fn resolve_effective_config(
         }
     }
 
+    let output_from_env = env::var("TOOL_OUTPUT")
+        .ok()
+        .map(|value| parse_output_format(&value))
+        .transpose()?;
+
     let output = global
         .output
         .or_else(|| global.json.then_some(OutputFormat::Json))
+        .or(output_from_env)
         .or(profile_cfg.output)
         .unwrap_or(OutputFormat::Table);
 
@@ -454,4 +460,14 @@ fn first_non_empty<const N: usize>(candidates: [Option<String>; N]) -> Option<St
         .filter_map(|value| value.as_ref())
         .find(|value| !value.trim().is_empty())
         .cloned()
+}
+
+fn parse_output_format(raw: &str) -> Result<OutputFormat, CliError> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "table" | "human" => Ok(OutputFormat::Table),
+        "json" => Ok(OutputFormat::Json),
+        _ => Err(CliError::usage(format!(
+            "invalid TOOL_OUTPUT '{raw}'; expected 'table' or 'json'"
+        ))),
+    }
 }

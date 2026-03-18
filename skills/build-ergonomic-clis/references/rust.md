@@ -123,14 +123,15 @@ Recommended precedence:
 
 1. CLI flags
 2. Environment variables
-3. Config file or selected profile
-4. Hardcoded defaults
+3. Target selection and target-scoped defaults/inference
+4. Selected profile/config
+5. Hardcoded defaults
 
 For self-hosted service CLIs:
 
 - Store host defaults separately from profile definitions.
 - Derive the chosen target identity key before matching (hostname/origin/base-URL, as documented).
-- Only reuse stored credentials when the selected profile host matches the target host.
+- Only reuse stored credentials when the selected profile matches the chosen target identity mode boundary (hostname/origin/base-URL), not merely the same host string.
 
 Reference pattern:
 
@@ -251,7 +252,7 @@ Recommended approach:
   - HTTP request: method, URL, headers (auth redacted), body.
   - HTTP response: status, headers, body (truncated to 64 KB).
   - The full error chain (`eyre` report or `thiserror` chain).
-- Print a one-line hint to stderr: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523.log`
+- Print a one-line hint to stderr only when the resolved mode/policy allows it. Envelope/porcelain modes keep the diagnostic path in machine metadata; direct-value stderr hints may be suppressed by `--quiet`.
 
 Implementation tips:
 

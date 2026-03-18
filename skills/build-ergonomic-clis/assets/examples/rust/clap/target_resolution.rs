@@ -201,11 +201,23 @@ fn select_remote<'a>(
     host_hint: Option<&str>,
 ) -> Result<Option<&'a GitRemote>, CliError> {
     if let Some(name) = preferred {
-        return remotes
+        let remote = remotes
             .iter()
             .find(|remote| remote.name == name)
-            .map(Some)
-            .ok_or_else(|| CliError(format!("unknown remote '{name}'")));
+            .ok_or_else(|| CliError(format!("unknown remote '{name}'")))?;
+        if let Some(host_hint) = host_hint {
+            let host_key = hostname_identity_key(host_hint)?;
+            let remote_host_key = remote_url_to_host_and_repo(&remote.url)
+                .ok()
+                .flatten()
+                .and_then(|(host, _)| hostname_identity_key(&host).ok());
+            if remote_host_key.as_deref() != Some(host_key.as_str()) {
+                return Err(CliError(format!(
+                    "remote '{name}' does not match the explicitly selected host '{host_hint}'"
+                )));
+            }
+        }
+        return Ok(Some(remote));
     }
 
     if let Some(host_hint) = host_hint {

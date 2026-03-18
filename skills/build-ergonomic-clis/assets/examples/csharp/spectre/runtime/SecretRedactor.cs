@@ -25,11 +25,11 @@ public static class SecretRedactor
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex CliFlagValuePattern = new(
-        @"(^|\s)--(?<key>token|open-token|open_token|access-token|access_token|refresh-token|refresh_token|id-token|id_token|api-key|api_key|apikey|client-secret|client_secret|password|pw|current-pw|current_pw|new-pw|new_pw|secret)\s+(?<val>\S+)",
+        @"(^|\s)--(?<key>token|open-token|open_token|access-token|access_token|refresh-token|refresh_token|id-token|id_token|api-key|api_key|apikey|client-secret|client_secret|password|pw|current-pw|current_pw|new-pw|new_pw|secret)\s+(?<val>""[^""]*""|'[^']*'|\S+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     private static readonly Regex CliFlagEqualsPattern = new(
-        @"(^|\s)--(?<key>token|open-token|open_token|access-token|access_token|refresh-token|refresh_token|id-token|id_token|api-key|api_key|apikey|client-secret|client_secret|password|pw|current-pw|current_pw|new-pw|new_pw|secret)=(?<val>\S+)",
+        @"(^|\s)--(?<key>token|open-token|open_token|access-token|access_token|refresh-token|refresh_token|id-token|id_token|api-key|api_key|apikey|client-secret|client_secret|password|pw|current-pw|current_pw|new-pw|new_pw|secret)=(?<val>""[^""]*""|'[^']*'|\S+)",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public static string? RedactPotentialSecrets(string? value)

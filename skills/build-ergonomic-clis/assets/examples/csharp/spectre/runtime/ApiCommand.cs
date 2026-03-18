@@ -88,15 +88,15 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         catch (CliException ex)
         {
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
-            RenderCliError(ex, resolved.OutputMode, logPath, settings.Quiet);
+            RenderCliError(ex, resolved.OutputMode, logPath, settings.Verbose, settings.Quiet, resolved.ToSafe(), httpDiagnostics.Snapshot);
             return ex.ExitCode;
         }
         catch (HttpRequestException ex)
         {
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
-            if (TryMapHttpError(ex, out var mapped))
+            if (MapHttpError(ex, httpDiagnostics.Snapshot) is { } mapped)
             {
-                RenderCliError(mapped, resolved.OutputMode, logPath, settings.Quiet);
+                RenderCliError(mapped, resolved.OutputMode, logPath, settings.Verbose, settings.Quiet, resolved.ToSafe(), httpDiagnostics.Snapshot);
                 return mapped.ExitCode;
             }
             RenderNetworkError(ex, logPath, resolved.ToSafe(), httpDiagnostics.Snapshot, resolved.OutputMode, settings.Verbose, settings.Quiet);
@@ -108,7 +108,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             {
                 var cancelled = CliException.Cancelled("Cancelled.");
                 var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, cancelled, httpDiagnostics.Snapshot);
-                RenderCliError(cancelled, resolved.OutputMode, logPath, settings.Quiet);
+                RenderCliError(cancelled, resolved.OutputMode, logPath, settings.Verbose, settings.Quiet, resolved.ToSafe(), httpDiagnostics.Snapshot);
                 return 10;
             }
 
@@ -143,7 +143,14 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         return response;
     }
 
-    private static void RenderCliError(CliException ex, OutputMode outputMode, string? logPath = null, bool quiet = false)
+    private static void RenderCliError(
+        CliException ex,
+        OutputMode outputMode,
+        string? logPath = null,
+        bool verbose = false,
+        bool quiet = false,
+        ResolvedContextSafe? context = null,
+        HttpExchangeSnapshot? exchange = null)
     {
         if (outputMode == OutputMode.Json)
         {
@@ -161,6 +168,18 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         Console.Error.WriteLine($"Error: {SecretRedactor.RedactPotentialSecrets(ex.Message)}");
         if (!string.IsNullOrWhiteSpace(ex.RecoveryCommand))
             Console.Error.WriteLine($"Try: {SecretRedactor.RedactPotentialSecrets(ex.RecoveryCommand)}");
+        if (!quiet && verbose)
+        {
+            if (context is not null)
+            {
+                Console.Error.WriteLine($"Target: {SecretRedactor.RedactPotentialSecrets(context.BaseUrl)} [{context.TargetIdentityKey}]");
+                Console.Error.WriteLine($"Profile: {context.Profile} (profile source: {context.ProfileSource}, auth source: {context.AuthSource})");
+            }
+            if (!string.IsNullOrWhiteSpace(exchange?.RequestMethod) || !string.IsNullOrWhiteSpace(exchange?.RequestUri))
+                Console.Error.WriteLine($"Request: {exchange?.RequestMethod ?? "(unknown)"} {exchange?.RequestUri ?? "(unknown)"}");
+            if (exchange?.ResponseStatusCode is int statusCode)
+                Console.Error.WriteLine($"Response: {statusCode} {exchange.ResponseReasonPhrase}");
+        }
         if (!quiet && !string.IsNullOrWhiteSpace(logPath))
             Console.Error.WriteLine($"Diagnostic log saved to: {logPath}");
     }
@@ -252,23 +271,21 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         };
     }
 
-    private static bool TryMapHttpError(HttpRequestException ex, out CliException mapped)
+    protected virtual CliException? MapHttpError(HttpRequestException ex, HttpExchangeSnapshot? exchange)
     {
-        mapped = null!;
         if (ex.StatusCode is null)
-            return false;
+            return null;
 
-        mapped = (int)ex.StatusCode switch
+        return (int)ex.StatusCode switch
         {
             401 => new CliException(3, "Authentication required.", "Run 'example auth login' or provide a token."),
             403 => new CliException(4, "Access denied for the current identity.", "Use a different profile/account or request the required permission."),
             404 => new CliException(5, "Requested resource was not found."),
             409 or 412 => new CliException(6, "Request conflicts with the current server state.", "Refresh state and retry."),
             429 => new CliException(7, "Request was rate limited.", "Retry later or reduce request rate."),
-            _ => null!,
+            >= 500 => new CliException(1, $"Server returned HTTP {(int)ex.StatusCode} {ex.StatusCode}.", "Check server logs or retry later."),
+            _ => new CliException(1, $"Request failed with HTTP {(int)ex.StatusCode} {ex.StatusCode}."),
         };
-
-        return mapped is not null;
     }
 
     private static void WriteJson(JsonEnvelope envelope)
