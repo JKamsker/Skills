@@ -56,10 +56,10 @@ Overridable with `--config <PATH>` or `JF_CONFIG` env var.
 ```jsonc
 {
   // Hostname key (lowercased hostname; IP addresses supported) of the default server. Must be a key in "hosts".
-  "defaultHost": "<hostnameKey>",
+  "defaultHost": "<hostname-key>",
 
   "hosts": {
-    "<hostnameKey>": {
+    "<hostname-key>": {
       // Full URL used to connect to this server.
       // All profiles under this host inherit this unless they override it.
       "baseUrl": "<url>",
@@ -188,9 +188,9 @@ Evaluated in order, first match wins:
 - Select `profileName` from `--profile`/`JF_PROFILE`, or default to `"default"`.
 - Do not read or write config and do not touch the secret store.
 
-**Lookup order for a bare hostname/IP/alias value:**
+**Lookup order for a bare hostname (or IP address) or alias value:**
 
-1. Exact match against `hosts` keys (hostname). If found, use it — alias scan is skipped entirely, even if another host has a matching alias.
+1. Exact match against `hosts` keys (hostname key). If found, use it — alias scan is skipped entirely, even if another host has a matching alias.
 2. Alias match: scan all hosts for one whose `aliases` array contains the value.
    - If exactly one host matches: use it.
    - If multiple hosts match: use the first match (config file order) and emit a warning:
@@ -258,19 +258,19 @@ When `--server` or `JF_SERVER` provides a full URL, the hostname is extracted fo
 | `http://192.168.1.50:8096` | `192.168.1.50` |
 | `nas.local` (bare) | `nas.local` |
  
-Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent). If parsing fails because the input has no scheme, treat the input as a bare hostname/IP (and if it looks like `host:port`, first add a default scheme before parsing).
+Extraction uses standard URL parsing: `new URL(input).hostname` (or equivalent). If parsing fails because the input has no scheme, treat the input as a bare hostname (or IP address) (and if it looks like `host:port`, first add a default scheme before parsing).
 
 Port and path are **not** part of the hostname key. They are preserved only in `baseUrl`.
 
 **Note:** Scheme-less `host:port` inputs (e.g. `nas.local:8096`) are treated as a full URL by first adding a default scheme (e.g. `http://nas.local:8096`) before extracting the hostname. This keeps the hostname key host-only while still allowing ports in the runtime base URL.
 
-### Exact normalization rules (hostname-key identity)
+### Exact normalization rules (hostname key)
 
 The hostname key is derived with these rules:
 
 - Trim whitespace.
 - If the input looks like a URL, parse it and extract `.hostname`.
-- Otherwise treat the input as a bare hostname/IP.
+- Otherwise treat the input as a bare hostname (or IP address).
 - Lowercase the hostname for the identity key.
 - Do not include scheme, port, path, query, or fragment in the identity key.
 
@@ -661,7 +661,7 @@ The CLI must never write a config that violates the above rules. Commands that w
  
 `https://myserver.com` and `http://myserver.com:8096/jellyfin` both resolve to hostname `myserver.com`. They share a host entry. The first login sets the host-level `baseUrl`. A subsequent login with a different URL stores the difference as a profile-level `baseUrl` override.
  
-### IP addresses as hostnames
+### IP addresses as hostname keys
  
 IP addresses (e.g. `192.168.1.50`) are valid hostname keys. They follow all the same rules.
  

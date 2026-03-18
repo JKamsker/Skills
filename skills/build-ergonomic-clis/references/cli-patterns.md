@@ -69,7 +69,7 @@ Rules:
 Reserve consistent flags and branches for consistent jobs.
 
 - `-h`, `--help`: help
-- `-V`, `--version` or `-v` only if your framework already owns it consistently
+- `-V`, `--version` (reserve `-v` for `--verbose`; if a framework forces `-v` for version, avoid using `-v` for verbose)
 - `--dry-run`: preview a mutating operation without side effects; prefer this as the primary safety flag
 - `-y`, `--yes`: skip a confirmation prompt when the command already has an explicit, predictable effect; for destructive commands this is also the explicit consent required in non-interactive contexts
 - `--json` or `--output json`: stable machine output (selects the default stable version, currently v1)
@@ -164,7 +164,7 @@ Machine contracts must be versioned:
 
 - In-band: `meta.schemaVersion = 1`
 - Porcelain/envelope selector (envelope metadata + structured error payload): `--porcelain=v1`
-- Direct-value selector (value-only stdout JSON): `--format-version 1`, `--output json-v1`
+- Direct-value selector (value-only stdout JSON; pick one): `--format-version 1` or `--output json-v1`
 
 Pick one selector surface per contract family. If you ship compatibility aliases within a family, document equivalence and treat disagreements as a usage error (exit `2`). Mixing families (for example: `--porcelain=v1` plus `--output json-v1`) is incompatible unless explicitly defined.
 
@@ -176,7 +176,9 @@ If a value-only command needs structured errors/metadata, provide a separate por
 
 If the CLI also provides a convenience flag like `--json`, define it precisely (e.g. "`--json` selects the default stable machine contract version, currently v1") so scripts can rely on it.
 
-If the user passes `--json` plus an explicit machine selector (`--porcelain=v1`, `--format-version 1`, `--output json-v1`), the explicit machine selector wins. If a human selector (`--output human` / `--no-json`) is combined with any machine selector, refuse (exit `2`).
+Treat `--json` as an alias for `--output json`.
+
+If the user passes `--json`/`--output json` plus an explicit machine selector (`--porcelain=v1`, `--format-version 1`, `--output json-v1`), the explicit machine selector wins. If a human selector (`--output human` / `--no-json`) is combined with any machine selector, refuse (exit `2`).
 
 Human output can evolve more freely. Machine output must have an explicit stability boundary.
 
@@ -238,7 +240,7 @@ Output resolution precedence (recommended):
 - Output flags/selectors (`--output …`, `--json`, `--porcelain=…`, `--format-version …`) win over env/config/profile defaults.
 - Env vars win over config/profile defaults.
 - If multiple explicit selectors are incompatible (e.g. `--output human` plus `--porcelain=v1`, `--porcelain=v1` plus `--output json-v1`, or `--format-version 2` plus `--output json-v1`), refuse (exit `2`) with an actionable message.
-- If `--json` is combined with an explicit machine selector (`--porcelain=v1`, `--format-version 1`, `--output json-v1`), the explicit machine selector wins.
+- If `--json`/`--output json` is combined with an explicit machine selector (`--porcelain=v1`, `--format-version 1`, `--output json-v1`), the explicit machine selector wins.
 - If a human selector (`--output human` / `--no-json`) is combined with any machine selector, refuse (exit `2`) with an actionable message.
 - If you support multiple machine selector surfaces as compatibility aliases, allow combinations only when they resolve to the same contract; otherwise refuse (exit `2`).
 

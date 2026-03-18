@@ -7,7 +7,7 @@ namespace ExampleCli.Runtime;
 
 // This example implements the **hostname-key** target identity mode (one valid target-identity choice).
 // - Network operations use a normalized base URL (scheme/port/path may matter).
-// - Credentials and defaults bind to the hostname identity key (lowercased hostname).
+// - Credentials and defaults bind to the hostname key (lowercased hostname; IP addresses supported).
 public enum AuthSource
 {
     None,

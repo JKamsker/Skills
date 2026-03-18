@@ -96,7 +96,7 @@ pub fn confirm_or_abort(
         return Err(CliError {
             exit: ExitCategory::Usage,
             message:
-                "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes (for example: --json)."
+                "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes (for example: --json / --output json / --output raw)."
                 .to_string(),
         });
     }
@@ -109,14 +109,14 @@ pub fn confirm_or_abort(
         });
     }
 
-    eprint!("{prompt} [y/N]: ");
+    eprint!("{prompt} Type 'yes' to confirm: ");
     io::stderr().flush().map_err(io_error)?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input).map_err(io_error)?;
     let answer = input.trim().to_ascii_lowercase();
 
-    Ok(if matches!(answer.as_str(), "y" | "yes") {
+    Ok(if answer == "yes" {
         GuardDecision::Continue
     } else {
         // Caller should map this explicit cancellation to exit 10.
@@ -164,7 +164,7 @@ pub fn write_raw_bytes(bytes: &[u8]) -> Result<(), CliError> {
 }
 
 /// Human-readable dry-run preview (table mode). In machine output modes, emit a structured preview via `write_value`.
-pub fn print_dry_run(method: &str, url: &str, headers: &[(&str, &str)]) -> Result<(), CliError> {
+pub fn print_dry_run_table(method: &str, url: &str, headers: &[(&str, &str)]) -> Result<(), CliError> {
     println!("{method} {url}");
     for (name, value) in headers {
         let display = if name.eq_ignore_ascii_case("authorization")

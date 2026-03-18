@@ -76,7 +76,7 @@ jf
  |    |-- logout                   Best-effort revoke and remove stored credential
  |    |-- status                   Show current auth state (user, server, token expiry)
  |    |-- whoami                   Show the authenticated user (GET /Users/Me)
- |    |-- set-token                Store a pre-existing token (supports --stdin)
+ |    |-- set-token [<token>]      Store a pre-existing token (required unless --stdin)
  |    |-- test                     Validate stored credentials against the server
  |    |-- profiles
  |    |    |-- list                List all saved profiles
@@ -195,8 +195,8 @@ jf
  |    |    |-- apply <id>          Apply lookup result to item (POST .../RemoteSearch/Apply/{itemId})
  |
  |-- shows                         TV show-specific views
- |    |-- episodes <seriesId>      Get episodes for a series (GET /Shows/{seriesId}/Episodes)
- |    |-- seasons <seriesId>       Get seasons for a series (GET /Shows/{seriesId}/Seasons)
+ |    |-- episodes <series-id>     Get episodes for a series (GET /Shows/{seriesId}/Episodes)
+ |    |-- seasons <series-id>      Get seasons for a series (GET /Shows/{seriesId}/Seasons)
  |    |-- next-up                  Get next-up episodes (GET /Shows/NextUp)
  |    |-- upcoming                 Get upcoming episodes (GET /Shows/Upcoming)
  |
@@ -211,19 +211,19 @@ jf
  |    |-- delete <id>              Delete a playlist (DELETE /Items/{itemId})  [confirm]
  |    |-- items
  |    |    |-- list <id>           List playlist items (GET /Playlists/{playlistId}/Items)
- |    |    |-- add <id> <itemIds>  Add items to playlist (POST /Playlists/{playlistId}/Items)
- |    |    |-- remove <id> <ids>   Remove items from playlist (DELETE .../Items)
+ |    |    |-- add <id> <item-ids> Add items to playlist (POST /Playlists/{playlistId}/Items)
+ |    |    |-- remove <id> <item-ids> Remove items from playlist (DELETE .../Items)
  |    |    |-- move <id> <item> <i> Move item in playlist (POST .../Items/{itemId}/Move/{newIndex})
  |    |-- users
  |    |    |-- list <id>           List playlist users (GET /Playlists/{playlistId}/Users)
- |    |    |-- get <id> <userId>   Get a playlist user (GET .../Users/{userId})
- |    |    |-- update <id> <uid>   Update playlist user perms (POST .../Users/{userId})
- |    |    |-- remove <id> <uid>   Remove user from playlist (DELETE .../Users/{userId})
+ |    |    |-- get <id> <user-id>  Get a playlist user (GET .../Users/{userId})
+ |    |    |-- update <id> <user-id> Update playlist user perms (POST .../Users/{userId})
+ |    |    |-- remove <id> <user-id> Remove user from playlist (DELETE .../Users/{userId})
  |
  |-- collections                   Collection (box set) management
  |    |-- create <name>            Create a collection (POST /Collections)
- |    |-- add <id> <itemIds>       Add items to a collection (POST /Collections/{id}/Items)
- |    |-- remove <id> <itemIds>    Remove items from a collection (DELETE /Collections/{id}/Items)
+ |    |-- add <id> <item-ids>      Add items to a collection (POST /Collections/{id}/Items)
+ |    |-- remove <id> <item-ids>   Remove items from a collection (DELETE /Collections/{id}/Items)
  |
  |-- libraries                     Library and virtual folder management
  |    |-- list                     List virtual folders / libraries (GET /Library/VirtualFolders)
@@ -241,10 +241,10 @@ jf
  |
  |-- sessions                      Active session management
  |    |-- list                     List active sessions (GET /Sessions)
- |    |-- message <sid> <text>     Send message to a session (POST /Sessions/{sid}/Message)
- |    |-- play <sid> <itemIds>     Instruct session to play items (POST /Sessions/{sid}/Playing)
- |    |-- command <sid> <cmd>      Send playback command (POST /Sessions/{sid}/Playing/{cmd})
- |    |-- system <sid> <cmd>       Send system command (POST /Sessions/{sid}/System/{cmd})
+ |    |-- message <session-id> <text> Send message to a session (POST /Sessions/{sid}/Message)
+ |    |-- play <session-id> <item-ids> Instruct session to play items (POST /Sessions/{sid}/Playing)
+ |    |-- command <session-id> <cmd> Send playback command (POST /Sessions/{sid}/Playing/{cmd})
+ |    |-- system <session-id> <cmd> Send system command (POST /Sessions/{sid}/System/{cmd})
  |
  |-- devices                       Device management
  |    |-- list                     List devices (GET /Devices)
@@ -330,9 +330,9 @@ jf
  |    |-- seek <ticks>             Seek to position (POST /SyncPlay/Seek)
  |    |-- next                     Next item (POST /SyncPlay/NextItem)
  |    |-- previous                 Previous item (POST /SyncPlay/PreviousItem)
- |    |-- queue <itemIds>          Queue items (POST /SyncPlay/Queue)
- |    |-- set-queue <itemIds>      Replace queue (POST /SyncPlay/SetNewQueue)
- |    |-- remove <ids>             Remove from playlist (POST /SyncPlay/RemoveFromPlaylist)
+ |    |-- queue <item-ids>         Queue items (POST /SyncPlay/Queue)
+ |    |-- set-queue <item-ids>     Replace queue (POST /SyncPlay/SetNewQueue)
+ |    |-- remove <item-ids>        Remove from playlist (POST /SyncPlay/RemoveFromPlaylist)
  |    |-- set-repeat <mode>        Set repeat mode (POST /SyncPlay/SetRepeatMode)
  |    |-- set-shuffle <mode>       Set shuffle mode (POST /SyncPlay/SetShuffleMode)
  |
@@ -354,8 +354,8 @@ jf
  |    |-- set <key> <value>        Set a config value
  |
  |-- raw <METHOD> <path>           Escape hatch: call any Jellyfin API endpoint directly
- |    |   --body <json>             Optional request body
- |    |   --body-file <path>        Read body from file
+ |    |   --body <JSON>             Optional request body
+ |    |   --body-file <PATH>        Read body from file
 ```
 
 ### Grouping rationale
@@ -463,7 +463,7 @@ jf auth login [--server <VALUE>] [--profile <NAME>] [--username <USER>] [--passw
 jf auth logout [--server <VALUE>] [--profile <NAME>]
 jf auth status
 jf auth whoami
-jf auth set-token <TOKEN> [--stdin] [--no-validate]
+jf auth set-token <token> [--stdin] [--no-validate]
 jf auth test
 jf auth profiles list [--server <VALUE>]
 jf auth profiles use <name> [--server <VALUE>]
@@ -554,7 +554,7 @@ Resolution is a two-step process: resolve the host, then resolve the profile wit
 
 | Priority | Source | Behavior |
 |----------|--------|----------|
-| 1 | `--server <VALUE>` flag | Full URL (or scheme-less `host:port`): extract hostname for lookup; use the URL as a runtime base URL override. Bare hostname or alias: lookup below. |
+| 1 | `--server <VALUE>` flag | Full URL (or scheme-less `host:port`): extract hostname for lookup; use the URL as a runtime base URL override. Bare hostname (or IP address) or alias: lookup below. |
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
@@ -1651,7 +1651,7 @@ return app.RunAsync(args);
 
 **Why no `jf play` top-level command?**
 Jellyfin's playback is session-directed (you tell a *session/device* to play something). There is
-no local playback. `jf sessions play <sessionId> <itemIds>` accurately reflects the mental model.
+no local playback. `jf sessions play <session-id> <item-ids>` accurately reflects the mental model.
 
 **Why `items` subsumes so many API tags?**
 A user does not think "I need the ItemLookup controller." They think "I want to find metadata for

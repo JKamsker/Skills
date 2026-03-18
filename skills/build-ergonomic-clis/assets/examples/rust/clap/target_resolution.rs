@@ -365,17 +365,28 @@ fn split_scp_host_and_path(input: &str) -> Result<(&str, &str), CliError> {
         return Err(CliError("empty".to_string()));
     }
 
-    let sep_index = if let Some(end) = trimmed.find("]:") {
-        end + 1
-    } else if trimmed.contains('[') {
+    let mut in_brackets = false;
+    let mut sep_index: Option<usize> = None;
+    for (index, ch) in trimmed.char_indices() {
+        match ch {
+            '[' => in_brackets = true,
+            ']' => in_brackets = false,
+            ':' if !in_brackets => {
+                sep_index = Some(index);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    if in_brackets {
         return Err(CliError(
             "invalid scp-style remote; expected [user@][ipv6]:path".to_string(),
         ));
-    } else {
-        trimmed
-            .find(':')
-            .ok_or_else(|| CliError("invalid scp-style remote; expected [user@]host:path".to_string()))?
-    };
+    }
+
+    let sep_index =
+        sep_index.ok_or_else(|| CliError("invalid scp-style remote; expected [user@]host:path".to_string()))?;
 
     let host = trimmed[..sep_index].trim();
     let path = trimmed[sep_index + 1..].trim();

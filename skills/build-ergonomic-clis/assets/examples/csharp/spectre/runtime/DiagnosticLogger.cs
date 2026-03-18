@@ -88,6 +88,7 @@ public sealed class DiagnosticLogger
             var builder = new StringBuilder();
             builder.AppendLine($"Timestamp: {DateTimeOffset.UtcNow:O}");
             builder.AppendLine($"Operation: {operation}");
+            builder.AppendLine($"CommandLine: {SecretRedactor.RedactPotentialSecrets(Environment.CommandLine)}");
             builder.AppendLine($"Exception: {exception.GetType().FullName}");
             builder.AppendLine($"Message: {SecretRedactor.RedactPotentialSecrets(exception.Message)}");
             builder.AppendLine();

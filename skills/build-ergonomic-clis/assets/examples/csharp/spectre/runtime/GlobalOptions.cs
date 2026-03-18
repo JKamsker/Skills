@@ -27,8 +27,8 @@ public class GlobalOptions : CommandSettings
     [Description("Emit JSON instead of human-readable tables")]
     public bool Json { get; init; }
 
-    [CommandOption("--quiet")]
-    [Description("Suppress banners and prompts")]
+    [CommandOption("-q|--quiet")]
+    [Description("Suppress non-essential output and prompts; fail if confirmation is required")]
     public bool Quiet { get; init; }
 
     [CommandOption("--verbose")]
