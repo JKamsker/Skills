@@ -166,8 +166,8 @@ public sealed class TargetResolver
 
         var targetIdentityKey = DeriveHostnameIdentityKey(resolvedBaseUrl);
 
-        var tokenFromFlag = FirstNonEmpty(options.Token);
-        var tokenFromEnv = FirstNonEmpty(Environment.GetEnvironmentVariable("EXAMPLE_TOKEN"));
+        var (tokenFromFlag, _) = FirstNonEmpty((options.Token, ResolutionSource.Flag));
+        var (tokenFromEnv, _) = FirstNonEmpty((Environment.GetEnvironmentVariable("EXAMPLE_TOKEN"), ResolutionSource.Environment));
         var token = tokenFromFlag
             ?? tokenFromEnv
             ?? _credentials.GetToken(targetIdentityKey, profileName);

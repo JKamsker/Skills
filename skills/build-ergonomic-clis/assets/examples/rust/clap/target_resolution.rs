@@ -57,15 +57,25 @@ pub fn resolve_target(
         .as_ref()
         .map(|repo| format!("{}/{}", repo.owner, repo.name));
 
-    let mut resolved_base_url = args
-        .repo
-        .as_ref()
-        .and_then(|repo| repo.host.as_deref())
-        .map(normalize_base_url)
-        .transpose()?;
+    if let (Some(explicit_host), Some(repo_host)) = (args.host.as_deref(), args.repo.as_ref().and_then(|repo| repo.host.as_deref())) {
+        let explicit_host_key = hostname_identity_key(explicit_host)?;
+        let repo_host_key = hostname_identity_key(repo_host)?;
+        if explicit_host_key != repo_host_key {
+            return Err(CliError(format!(
+                "conflicting host selectors: --host '{explicit_host}' does not match repo host '{repo_host}'"
+            )));
+        }
+    }
+
+    let mut resolved_base_url = args.host.as_deref().map(normalize_base_url).transpose()?;
 
     if resolved_base_url.is_none() {
-        resolved_base_url = args.host.as_deref().map(normalize_base_url).transpose()?;
+        resolved_base_url = args
+            .repo
+            .as_ref()
+            .and_then(|repo| repo.host.as_deref())
+            .map(normalize_base_url)
+            .transpose()?;
     }
 
     if resolved_base_url.is_none() || resolved_repo.is_none() {
@@ -129,10 +139,15 @@ pub fn parse_repo_arg(raw: &str) -> Result<RepoArg, CliError> {
     let name = last.strip_suffix(".git").unwrap_or(last).to_string();
 
     let first = segments[0];
-    let looks_like_host = first.contains('.')
-        || first.contains(':')
+    let looks_like_host = first.contains(':')
         || first.eq_ignore_ascii_case("localhost")
         || first.parse::<std::net::IpAddr>().is_ok();
+
+    if !looks_like_host && first.contains('.') && segments.len() >= 3 {
+        return Err(CliError(format!(
+            "ambiguous repo '{raw}': dotted first segment could be a host or an owner. Pass --host explicitly."
+        )));
+    }
 
     let (host, owner_segments) = if segments.len() >= 3 && looks_like_host {
         (Some(first.to_string()), &segments[1..segments.len() - 1])

@@ -151,6 +151,16 @@ pub fn resolve_effective_config(
 
     let profile_cfg = config.profiles.get(&profile).cloned().unwrap_or_default();
 
+    if let (Some(hostname), Some(base_url)) = (profile_cfg.hostname.as_deref(), profile_cfg.base_url.as_deref()) {
+        let hostname_key = normalize_hostname(hostname)?;
+        let base_url_key = target_identity_hostname_key(&normalize_base_url_input(base_url)?)?;
+        if hostname_key != base_url_key {
+            return Err(CliError::usage(format!(
+                "profile '{profile}' has mismatched hostname '{hostname_key}' and base_url '{base_url}'"
+            )));
+        }
+    }
+
     let profile_target_key = if let Some(hostname) = profile_cfg.hostname.as_deref() {
         Some(normalize_hostname(hostname)?)
     } else if let Some(base_url) = profile_cfg.base_url.as_deref() {

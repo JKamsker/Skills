@@ -443,7 +443,7 @@ Rename a profile.
 jf auth profiles rename <old> <new> [--server <VALUE>]
 ```
  
-Resolves the host. Renames the profile key. Updates `defaultProfile` if it pointed to the old name. Errors if `<new>` already exists on that host.
+Resolves the host. Renames the profile key. Updates `defaultProfile` if it pointed to the old name. Re-keys any stored credentials from `jf:cred:{hostKey}:{old}:{credentialKind}` to `jf:cred:{hostKey}:{new}:{credentialKind}`. Errors if `<new>` already exists on that host.
  
 #### `jf auth profiles delete <name>`
  
@@ -453,7 +453,7 @@ Remove a profile without revoking the token server-side.
 jf auth profiles delete <name> [--server <VALUE>]
 ```
  
-Resolves the host. Removes the profile. If it was `defaultProfile`, clears `defaultProfile` (next resolution will require explicit selection or fall through to single-profile inference). If it was the last profile, removes the host entry.
+Resolves the host. Removes the profile. Deletes any stored credentials keyed under `jf:cred:{hostKey}:{name}:{credentialKind}`. If it was `defaultProfile`, clears `defaultProfile` (next resolution will require explicit selection or fall through to single-profile inference). If it was the last profile, removes the host entry.
  
 ### 5.3 Host Management
  
@@ -492,7 +492,7 @@ Rename a host key.
 jf auth host rename <old-host-key> <new-host-key>
 ```
 
-Renames the key in `hosts`. Updates `defaultHost` if it pointed to the old name. Does not change any `baseUrl` values.
+Renames the key in `hosts`. Updates `defaultHost` if it pointed to the old name. Re-keys any stored credentials from `jf:cred:{oldHostKey}:{profile}:{credentialKind}` to `jf:cred:{newHostKey}:{profile}:{credentialKind}`. Does not change any `baseUrl` values.
  
 #### `jf auth host delete <host-key>`
  

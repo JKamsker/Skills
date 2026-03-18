@@ -108,21 +108,7 @@ public sealed class DiagnosticLogger
 
         try
         {
-            using var stream = await content.ReadAsStreamAsync(cancellationToken);
-            using var buffer = new MemoryStream();
-            var chunk = new byte[8192];
-            var remaining = MaxBodyPreviewBytes + 1;
-            while (remaining > 0)
-            {
-                var read = await stream.ReadAsync(chunk.AsMemory(0, Math.Min(chunk.Length, remaining)), cancellationToken);
-                if (read == 0)
-                    break;
-
-                buffer.Write(chunk, 0, read);
-                remaining -= read;
-            }
-
-            var bytes = buffer.ToArray();
+            var bytes = await content.ReadAsByteArrayAsync(cancellationToken);
             var truncated = bytes.Length > MaxBodyPreviewBytes;
             if (truncated)
                 bytes = bytes[..MaxBodyPreviewBytes];

@@ -71,7 +71,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         catch (CliException ex)
         {
             var logPath = _diagnosticLogger.TryWrite(context.Name, ex);
-            RenderCliError(ex, outputMode, logPath, settings.Quiet);
+            RenderCliError(ex, outputMode, logPath, settings.Verbose, settings.Quiet);
             return ex.ExitCode;
         }
         catch (Exception ex)
