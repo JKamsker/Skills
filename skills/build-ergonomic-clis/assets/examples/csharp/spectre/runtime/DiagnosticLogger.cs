@@ -11,6 +11,8 @@ namespace ExampleCli.Runtime;
 
 public sealed class DiagnosticLogger
 {
+    private const int MaxBodyPreviewBytes = 64 * 1024;
+
     public string? TryWrite(
         ResolvedContextSafe context,
         string operation,
@@ -102,14 +104,14 @@ public sealed class DiagnosticLogger
 
         try
         {
-            await content.LoadIntoBufferAsync();
+            await content.LoadIntoBufferAsync(MaxBodyPreviewBytes);
             var body = await content.ReadAsStringAsync(cancellationToken);
             var redacted = SecretRedactor.RedactPotentialSecrets(body) ?? string.Empty;
-            return Truncate(redacted, 4096);
+            return Truncate(redacted, MaxBodyPreviewBytes);
         }
         catch
         {
-            return "(unavailable)";
+            return "(body preview unavailable or exceeds 64 KB)";
         }
     }
 

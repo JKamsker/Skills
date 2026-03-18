@@ -185,7 +185,7 @@ Human output can evolve more freely. Machine output must have an explicit stabil
 ### Failure representation
 
 - **Envelope contract**: represent expected failures as a JSON envelope on stdout (`ok: false`) with a stable `error.kind` and actionable recovery guidance when possible.
-- **Direct-value contract**: keep stdout value-only; represent errors on stderr and via exit codes. If you need structured errors in direct-value mode, use a separate opt-in selector (porcelain vN) instead of silently changing the contract.
+- **Direct-value contract**: keep stdout value-only; represent errors on stderr and via exit codes. A pure direct-value mode does not also get a structured stdout error payload. If you need structured errors in direct-value mode, use a separate opt-in selector (porcelain vN) instead of silently changing the contract.
 
 Exit codes still matter for automation:
 
@@ -230,6 +230,7 @@ Treat human and machine output as separate contracts.
 - In machine modes:
   - For envelope-style contracts, avoid ad hoc stderr noise (banners/progress/warnings); prefer structured warnings/diagnostic paths inside machine metadata.
   - For direct-value/pipeline contracts, stderr remains the channel for warnings and errors; keep stdout value-only.
+  - For raw-byte stdout modes, keep stdout byte-only; route prompts, banners, progress, warnings, and diagnostic hints to stderr or disable them entirely.
 - Redact secrets in human output and config dumps.
 - Use explicit exit codes for common failure classes.
 
@@ -295,7 +296,7 @@ Define `--quiet` precisely:
 - Does not suppress primary command output (tables/value output) unless the command explicitly documents that it is safe to do so.
 - In human output modes, suppresses warnings unless they affect correctness (for example: partial results, ambiguous target selection, or a fallback that changes which resource is acted on).
 - In machine output modes, do not change the machine contract payload; warnings remain represented where the contract expects them (for example: envelope/porcelain metadata such as `meta.warnings`; for direct-value/pipeline commands without metadata, use stderr while keeping stdout value-only).
-- Suppresses "diagnostic log saved to ..." hints; the log file may still be written.
+- Suppresses "diagnostic log saved to ..." hints; the log file may still be written. In direct-value/value-only modes, keep the primary stderr error, but treat the log-path hint itself as suppressible unless it is part of the documented primary recovery guidance.
 - May still write diagnostic artifacts according to policy.
 
 ## Dry-Run Semantics (`--dry-run`)
@@ -371,7 +372,7 @@ Recommended approach:
 - Name files with a timestamp so they do not collide: `tool-error-20260316-141523-042.log`.
 - In human output modes, print a hint to stderr when a diagnostic file is written: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523-042.log`
 - In machine output modes with metadata (envelope `meta`, porcelain fields, etc.), avoid extra stderr noise and include the diagnostic path there.
-- For direct-value/value-only machine modes, keep stdout untouched; if you need to surface the diagnostic path, do it in the structured error contract for that mode or in the stderr error message.
+- For direct-value/value-only machine modes, keep stdout untouched. These modes do not add a structured stdout error payload; if you surface the diagnostic path at all, do it in the stderr error message, and let `--quiet` suppress that hint unless the path is part of the documented primary recovery guidance.
 - Suggest including the log when reporting issues: `Include this file when reporting a bug.`
 
 For protocol/service-specific diagnostic logging (exchange capture, auth header redaction), see [service-cli-patterns.md](service-cli-patterns.md).

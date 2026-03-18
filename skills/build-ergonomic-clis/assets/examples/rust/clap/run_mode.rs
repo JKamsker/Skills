@@ -8,8 +8,8 @@ pub enum OutputFormat {
     Table,
     /// Machine output (JSON, pretty-printed).
     Json,
-    /// Machine output (JSON, compact). Not raw bytes; see `write_raw_bytes`.
-    Raw,
+    /// Machine output (JSON, compact). Raw bytes remain a separate non-machine mode; see `write_raw_bytes`.
+    JsonCompact,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -93,11 +93,11 @@ pub fn confirm_or_abort(
         return Ok(GuardDecision::Continue);
     }
 
-    if matches!(mode.output, OutputFormat::Json | OutputFormat::Raw) {
+    if matches!(mode.output, OutputFormat::Json | OutputFormat::JsonCompact) {
         let mut error = CliError {
             exit: ExitCategory::Usage,
             message:
-                "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes (for example: --json / --output json / --output raw)."
+                "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes (for example: --json / --output json / --output json-compact)."
                 .to_string(),
             already_rendered: false,
         };
@@ -134,7 +134,7 @@ pub fn write_value<T: Serialize>(value: &T, format: OutputFormat) -> Result<(), 
         OutputFormat::Json => {
             write_json_envelope(value, None::<JsonError>, format)?;
         }
-        OutputFormat::Raw => {
+        OutputFormat::JsonCompact => {
             write_json_envelope(value, None::<JsonError>, format)?;
         }
         OutputFormat::Table => {
@@ -152,7 +152,7 @@ pub fn write_error(error: &mut CliError, format: OutputFormat) -> Result<(), Cli
     }
 
     match format {
-        OutputFormat::Json | OutputFormat::Raw => {
+        OutputFormat::Json | OutputFormat::JsonCompact => {
             let json_error = JsonError {
                 kind: kind_for_exit(error.exit).to_string(),
                 message: error.message.clone(),
@@ -254,7 +254,7 @@ fn write_json_envelope<T: Serialize>(
 
     match format {
         OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&envelope).map_err(json_error)?),
-        OutputFormat::Raw => println!("{}", serde_json::to_string(&envelope).map_err(json_error)?),
+        OutputFormat::JsonCompact => println!("{}", serde_json::to_string(&envelope).map_err(json_error)?),
         OutputFormat::Table => unreachable!("table output does not use JSON envelopes"),
     }
 

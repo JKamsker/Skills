@@ -56,10 +56,10 @@ Overridable with `--config <PATH>` or `JF_CONFIG` env var.
 ```jsonc
 {
   // Hostname key (lowercased hostname; IP addresses supported) of the default server. Must be a key in "hosts".
-  "defaultHost": "<hostname-key>",
+  "defaultHost": "<host-key>",
 
   "hosts": {
-    "<hostname-key>": {
+    "<host-key>": {
       // Full URL used to connect to this server.
       // All profiles under this host inherit this unless they override it.
       "baseUrl": "<url>",
@@ -97,10 +97,10 @@ Tokens and API keys are stored separately from `config.json` (OS credential stor
 
 Recommended keying model:
 
-- `jf:cred:{hostnameKey}:{profile}:token`
-- `jf:cred:{hostnameKey}:{profile}:apiKey`
+- `jf:cred:{hostKey}:{profile}:token`
+- `jf:cred:{hostKey}:{profile}:apiKey`
 
-Where `{hostnameKey}` is the **hostname key** (lowercased) and `{profile}` is the profile name within that host.
+Where `{hostKey}` is the **host key** (lowercased hostname; IP addresses supported) and `{profile}` is the profile name within that host.
 
 Fallback (allowed but discouraged): a separate secrets file (e.g. `secrets.json`) with strict permissions and explicit redaction rules. If this fallback is used, it must be clearly labeled as a tradeoff in docs and help.
 
@@ -184,7 +184,7 @@ Evaluated in order, first match wins:
 **CI/automation escape hatch:** If `JF_TOKEN` is set and the selected server input is a **full URL (or scheme-less `host:port`)**, the CLI may allow an ephemeral, config-less context:
 
 - If no configured host/alias matches the extracted hostname, treat it as an implicit host for this invocation.
-- Derive `hostnameKey` from the URL hostname and use the URL as the effective base URL.
+- Derive `hostKey` from the URL hostname and use the URL as the effective base URL.
 - Select `profileName` from `--profile`/`JF_PROFILE`, or default to `"default"`.
 - Do not read or write config and do not touch the secret store.
 
@@ -289,18 +289,18 @@ resolve(serverArg, profileArg):
   // Host lookup uses the hostname key (lowercased hostname; IP addresses supported).
   // If the input is scheme-less host:port, treat it as URL-like by adding a default scheme first.
   urlInput = withDefaultSchemeIfNeeded(hostInput)
-  hostnameKey =
+  hostKey =
     if looksLikeUrlInput(urlInput) then lower(parseUrl(urlInput).hostname)
     else lower(hostInput)
 
   // CI/automation escape hatch: allow an ephemeral context with env token + full URL.
   // This bypasses config and the secret store and does not create or modify profiles.
-  if env.JF_TOKEN is set and looksLikeUrlInput(urlInput) and (config.hosts[hostnameKey] is missing) and (resolveAlias(hostnameKey) is missing):
+  if env.JF_TOKEN is set and looksLikeUrlInput(urlInput) and (config.hosts[hostKey] is missing) and (resolveAlias(hostKey) is missing):
     profileName = profileArg ?? env.JF_PROFILE ?? "default"
     effectiveBaseUrl = normalizeBaseUrl(urlInput)
-    return (hostnameKey, profileName, effectiveBaseUrl, env.JF_TOKEN)
+    return (hostKey, profileName, effectiveBaseUrl, env.JF_TOKEN)
 
-  host = config.hosts[hostnameKey] ?? resolveAlias(hostnameKey) ?? error()
+  host = config.hosts[hostKey] ?? resolveAlias(hostKey) ?? error()
 
   profileName = profileArg ?? env.JF_PROFILE ?? host.defaultProfile ?? singleProfileOrError()
   profile = host.profiles[profileName] ?? error()
@@ -312,9 +312,9 @@ resolve(serverArg, profileArg):
   credentialKind = profile.authKind
   secret =
     if env.JF_TOKEN is set then env.JF_TOKEN
-    else secretStore.get("jf:cred:{hostnameKey}:{profile}:{credentialKind}") ?? missingAuthError()
+    else secretStore.get("jf:cred:{hostKey}:{profile}:{credentialKind}") ?? missingAuthError()
 
-  return (hostnameKey, profileName, effectiveBaseUrl, secret)
+  return (hostKey, profileName, effectiveBaseUrl, secret)
 ```
  
 ---
@@ -345,10 +345,10 @@ jf auth login [--server <VALUE>] [--profile <NAME>] [--username <USER>] [--passw
 
 1. Resolve the server input using standard host resolution (§3.1). If a full URL (or scheme-less `host:port`) was provided, extract the hostname for the hostname key.
 2. Perform the selected auth flow (password-based or quick-connect) and obtain an access token (see `jf-cli-design.md` for the detailed interaction contract).
-3. Create or update `hosts[hostnameKey]`:
+3. Create or update `hosts[hostKey]`:
    - Set `baseUrl` on the host if this is a new host entry.
    - Create/update `profiles[name]` with non-secret metadata (`authKind`, `user`, optional `userId`).
-   - Store the credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (where `credentialKind` is `profile.authKind`).
+   - Store the credential in the secret store under `jf:cred:{hostKey}:{profile}:{credentialKind}` (where `credentialKind` is `profile.authKind`).
    - If this is the only host, set as `defaultHost`.
    - If this is the only profile on the host, set as `defaultProfile`.
 4. Write config.
@@ -603,7 +603,7 @@ These flags are available on all commands, not just `auth`:
 | `--profile <NAME>` | `JF_PROFILE` | Profile name to use on the resolved host. |
 | `--config <PATH>` | `JF_CONFIG` | Path to config file (overrides default location). |
 | `--json` | `JF_OUTPUT` | Output the versioned JSON envelope contract to stdout (non-interactive). |
-| `--quiet` | | Suppress human-facing output and prompts; if a confirmation prompt would be required, refuse with exit `2` unless `--yes` or `--dry-run` is provided. |
+| `--quiet` | | Suppress non-essential human-facing output and prompts; if a confirmation prompt would be required, refuse with exit `2` unless `--yes` or `--dry-run` is provided. Does not suppress primary command output such as a documented dry-run preview or JSON envelope. |
 | `--dry-run` | | Preview a mutating operation without mutating. |
 | `--yes` | | Skip confirmation prompts for destructive actions. |
 | `--no-color` | `NO_COLOR` | Disable ANSI formatting. |
@@ -624,7 +624,7 @@ If `config.json` does not exist but a legacy `credentials.json` is found in the 
 3. Parse the hostname from the server URL.
 4. Create `config.json` with a single host and a single profile named `"default"`.
 5. Set that host as `defaultHost` and `"default"` as `defaultProfile`.
-6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostnameKey}:default:{credentialKind}`.
+6. Set `profiles["default"].authKind` to the migrated credential kind and store the credential in the secret store under `jf:cred:{hostKey}:default:{credentialKind}`.
 7. Rename `credentials.json` to `credentials.json.bak`.
 8. In human mode, print a one-line note to stderr: `Migrated credentials to new profile format. Backup: credentials.json.bak` (in `--json`, include as a `meta.warnings` item; no stderr noise).
  

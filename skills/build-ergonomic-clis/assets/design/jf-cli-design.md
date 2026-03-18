@@ -500,7 +500,7 @@ jf auth api-keys delete <key>
     d. If TTY present and no `--password-stdin`, prompt for password on stderr with no-echo.
     e. If no TTY and no `--password-stdin`, fail: `Password required. Use --password-stdin or run interactively.`
     f. POST /Users/AuthenticateByName with username and password.
-    g. Store the returned credential in the secret store under `jf:cred:{hostnameKey}:{profile}:{credentialKind}` (hostname key + profile name + credential kind).
+    g. Store the returned credential in the secret store under `jf:cred:{hostKey}:{profile}:{credentialKind}` (host key + profile name + credential kind).
 4. Save or update a profile entry in config.
 5. In human output modes, print the username and server on stderr to confirm. In `--json` mode, include these as structured metadata in the JSON envelope (avoid ad hoc stderr noise).
 
@@ -529,7 +529,7 @@ The CLI never opens a login prompt from a non-auth command. Ever.
 - File permissions: `config.json` is still user-only (600 on Unix; user-restricted ACL on Windows where possible).
 - If a legacy `credentials.json` exists and `config.json` does not, the CLI performs an automatic one-time migration on first run:
   - moves the credential into the secret store
-  - writes the new `config.json` (creates `hosts[hostnameKey]` and a `"default"` profile, and sets `defaultHost` / `defaultProfile`)
+  - writes the new `config.json` (creates `hosts[hostKey]` and a `"default"` profile, and sets `defaultHost` / `defaultProfile`)
   - backs up `credentials.json` to `credentials.json.bak`
   - emits a brief stderr note in human mode; in machine output mode, represent it as a `meta.warnings` item (no ad hoc stderr noise)
 
@@ -714,7 +714,7 @@ Individual commands may add their own flags (e.g., `--recursive`, `--limit`, `--
   ```
   Error: Confirmation required. Use --yes to confirm or --dry-run to preview.
   ```
-- Combined with `--json`, still emits the normal JSON envelope on stdout; `--quiet` only suppresses human-facing stderr chatter.
+- `--quiet` suppresses non-essential human-facing stderr chatter; it does not suppress primary command output such as a JSON envelope or a documented dry-run preview.
 
 ### Dry-run output
 
@@ -828,7 +828,7 @@ executing. These include:
 | `--dry-run --yes` | `--dry-run` wins. Preview only, exit 0. |
 | `--quiet` | Fail with exit 2: "Confirmation required. Use --yes to confirm or --dry-run to preview." |
 | `--quiet --yes` | Execute silently. In human mode: no output on success. In `--json` mode: still emits the JSON envelope on stdout. |
-| `--quiet --dry-run` | Print preview, exit 0. No prompt. |
+| `--quiet --dry-run` | Print the normal dry-run preview, exit 0. No prompt. |
 
 ### Confirmation prompt format
 

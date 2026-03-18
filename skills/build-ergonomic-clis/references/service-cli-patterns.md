@@ -115,18 +115,22 @@ Every service-like CLI should present a one-page resolution sequence. A good tem
 
 1. Read **explicit flags** (target + profile/context + auth overrides).
 2. Read **environment variables** (mirroring flags).
-3. Resolve **explicit profile/context/account selection** (if provided).
-4. Resolve **explicit target tokens** (exact target key match first, alias scan second, per documented ambiguity policy).
-5. Apply **defaults** (global default, per-target default, single-entry inference) only if the target is still unresolved.
-6. If still unresolved and you support it, apply **context inference** (git remotes, workspace markers, directory discovery) and make it inspectable.
-7. Derive the **target identity key** (per the chosen mode).
-8. Look up **credentials** using the identity key (and the selected profile/context if applicable).
-9. Produce the final **effective target** used for network operations (base URL, timeouts, retries).
+3. Resolve **explicit target tokens** (exact target key match first, alias scan second, per documented ambiguity policy).
+4. If the target is still unresolved, apply **target defaults** (global default, single-target inference).
+5. If the target is still unresolved and you support it, apply **context inference** (git remotes, workspace markers, directory discovery) and make it inspectable.
+6. Resolve **profile/context/account selection against the selected target**: explicit profile first, then per-target default profile/context, then single-profile inference.
+7. Resolve the **effective output mode and prompt eligibility** from flags/env/config/profile defaults before any prompt; if the resolved mode is machine output, never prompt.
+8. Derive the **target identity key** (per the chosen mode).
+9. Look up **credentials** using the identity key (and the selected profile/context if applicable).
+10. Produce the final **effective target** used for network operations (base URL, timeouts, retries).
 
 Rules:
 
+- If profile/context names are only unique within a target, do not attempt final profile resolution until the target is known.
 - If multiple profiles match and there is no default mapping, require an explicit selection instead of guessing.
 - If repo/directory inference exists, document it as a lower-priority fallback, not the primary contract.
+- After the target is known, still apply the target-scoped default profile/context or single-profile inference even if the target came from an explicit flag or context inference.
+- Resolve the final output mode before any prompt, because flags/env/config/profile defaults may switch the command into machine output.
 - In machine output modes, never prompt; return an actionable error (exit `2`).
 - In human output modes, only prompt when `--quiet` is not set and stdin and stderr are attached to a terminal; otherwise refuse (exit `2`) with an actionable message.
 
@@ -260,8 +264,8 @@ Service CLIs should extend the generic error rules with protocol-aware recovery 
 
 HTTP is one example:
 
-- 401 → not authenticated / missing or invalid credentials (exit `3`) with login/token recovery guidance
-- 403 → authenticated but not authorized (exit `4`) with permission or profile/account-switch guidance
+- 401 usually means not authenticated / missing or invalid credentials (exit `3`) with login/token recovery guidance
+- 403 often means authenticated but not authorized (exit `4`) with permission or profile/account-switch guidance, but if the service uses `403` for missing/invalid credentials, still classify it as `not authenticated` (exit `3`)
 - 404 → not found (exit `5`)
 - 409/412 → conflict/precondition (exit `6`)
 - 429 → rate limited (exit `7`)

@@ -34,7 +34,7 @@ Prefer the small examples in this skill before copying repository code directly:
 
 - [../assets/examples/rust/clap/profile_context.rs](../assets/examples/rust/clap/profile_context.rs): hostname-key target identity + base URL split, profile resolution, and secret-store lookup.
 - [../assets/examples/rust/clap/target_resolution.rs](../assets/examples/rust/clap/target_resolution.rs): layered `--host` / `--repo` / `--remote` / env fallback target inference inspired by `fj-ex`.
-- [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs): machine-vs-human output, `--dry-run`, `--yes`, TTY-aware prompts, raw bytes, and exit categories.
+- [../assets/examples/rust/clap/run_mode.rs](../assets/examples/rust/clap/run_mode.rs): machine-vs-human output, compact vs pretty JSON envelopes, `--dry-run`, `--yes`, TTY-aware prompts, separate raw-byte stdout handling, and exit categories.
 
 Note: the Jellyfin worked example uses a **host → profiles** config shape. The small resolver example assets prioritize the identity-key and precedence rules and use a simplified flat profile store to keep the sketch compact.
 

@@ -70,13 +70,14 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (CliException ex)
         {
-            RenderCliError(ex, outputMode);
+            var logPath = _diagnosticLogger.TryWrite(context.Name, ex);
+            RenderCliError(ex, outputMode, logPath, settings.Quiet);
             return ex.ExitCode;
         }
         catch (Exception ex)
         {
             var logPath = _diagnosticLogger.TryWrite(context.Name, ex);
-            RenderUnexpectedError(ex, logPath, outputMode, settings.Quiet);
+            RenderUnexpectedError(ex, logPath, outputMode, settings.Verbose, settings.Quiet);
             return 1;
         }
 
@@ -86,12 +87,18 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (CliException ex)
         {
-            RenderCliError(ex, resolved.OutputMode);
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
+            RenderCliError(ex, resolved.OutputMode, logPath, settings.Quiet);
             return ex.ExitCode;
         }
         catch (HttpRequestException ex)
         {
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
+            if (TryMapHttpError(ex, out var mapped))
+            {
+                RenderCliError(mapped, resolved.OutputMode, logPath, settings.Quiet);
+                return mapped.ExitCode;
+            }
             RenderNetworkError(ex, logPath, resolved.ToSafe(), httpDiagnostics.Snapshot, resolved.OutputMode, settings.Verbose, settings.Quiet);
             return 8;
         }
@@ -99,7 +106,9 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         {
             if (cancellationToken.IsCancellationRequested)
             {
-                RenderCliError(CliException.Cancelled("Cancelled."), resolved.OutputMode);
+                var cancelled = CliException.Cancelled("Cancelled.");
+                var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, cancelled, httpDiagnostics.Snapshot);
+                RenderCliError(cancelled, resolved.OutputMode, logPath, settings.Quiet);
                 return 10;
             }
 
@@ -110,7 +119,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
-            RenderUnexpectedError(ex, logPath, resolved.OutputMode, settings.Quiet);
+            RenderUnexpectedError(ex, logPath, resolved.OutputMode, settings.Verbose, settings.Quiet, resolved.ToSafe());
             return 1;
         }
     }
@@ -134,7 +143,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         return response;
     }
 
-    private static void RenderCliError(CliException ex, OutputMode outputMode)
+    private static void RenderCliError(CliException ex, OutputMode outputMode, string? logPath = null, bool quiet = false)
     {
         if (outputMode == OutputMode.Json)
         {
@@ -145,13 +154,15 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                     Kind: KindForExitCode(ex.ExitCode),
                     Message: SecretRedactor.RedactPotentialSecrets(ex.Message) ?? string.Empty,
                     Recovery: SecretRedactor.RedactPotentialSecrets(ex.RecoveryCommand)),
-                Meta: new JsonMeta(SchemaVersion: 1)));
+                Meta: new JsonMeta(SchemaVersion: 1, DiagnosticLogPath: NormalizeLogPath(logPath))));
             return;
         }
 
         Console.Error.WriteLine($"Error: {SecretRedactor.RedactPotentialSecrets(ex.Message)}");
         if (!string.IsNullOrWhiteSpace(ex.RecoveryCommand))
             Console.Error.WriteLine($"Try: {SecretRedactor.RedactPotentialSecrets(ex.RecoveryCommand)}");
+        if (!quiet && !string.IsNullOrWhiteSpace(logPath))
+            Console.Error.WriteLine($"Diagnostic log saved to: {logPath}");
     }
 
     private static void RenderNetworkError(
@@ -190,7 +201,13 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             Console.Error.WriteLine($"Diagnostic log saved to: {logPath}");
     }
 
-    private static void RenderUnexpectedError(Exception ex, string? logPath, OutputMode outputMode, bool quiet)
+    private static void RenderUnexpectedError(
+        Exception ex,
+        string? logPath,
+        OutputMode outputMode,
+        bool verbose,
+        bool quiet,
+        ResolvedContextSafe? context = null)
     {
         if (outputMode == OutputMode.Json)
         {
@@ -205,6 +222,15 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
 
         Console.Error.WriteLine("Unexpected client error.");
+        if (!quiet && verbose)
+        {
+            if (context is not null)
+            {
+                Console.Error.WriteLine($"Target: {SecretRedactor.RedactPotentialSecrets(context.BaseUrl)} [{context.TargetIdentityKey}]");
+                Console.Error.WriteLine($"Profile: {context.Profile} (auth source: {context.AuthSource})");
+            }
+            Console.Error.WriteLine($"Details: {SecretRedactor.RedactPotentialSecrets(ex.Message)}");
+        }
         if (!quiet && !string.IsNullOrWhiteSpace(logPath))
             Console.Error.WriteLine($"Diagnostic log saved to: {logPath}");
     }
@@ -224,6 +250,25 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             10 => "cancelled",
             _ => "error",
         };
+    }
+
+    private static bool TryMapHttpError(HttpRequestException ex, out CliException mapped)
+    {
+        mapped = null!;
+        if (ex.StatusCode is null)
+            return false;
+
+        mapped = (int)ex.StatusCode switch
+        {
+            401 => new CliException(3, "Authentication required.", "Run 'example auth login' or provide a token."),
+            403 => new CliException(4, "Access denied for the current identity.", "Use a different profile/account or request the required permission."),
+            404 => new CliException(5, "Requested resource was not found."),
+            409 or 412 => new CliException(6, "Request conflicts with the current server state.", "Refresh state and retry."),
+            429 => new CliException(7, "Request was rate limited.", "Retry later or reduce request rate."),
+            _ => null!,
+        };
+
+        return mapped is not null;
     }
 
     private static void WriteJson(JsonEnvelope envelope)

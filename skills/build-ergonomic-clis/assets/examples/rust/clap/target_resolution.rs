@@ -69,7 +69,12 @@ pub fn resolve_target(
     }
 
     if resolved_base_url.is_none() || resolved_repo.is_none() {
-        if let Some(remote) = select_remote(remotes, args.remote.as_deref(), args.host.as_deref())? {
+        let host_hint = if args.host.is_some() || args.repo.as_ref().and_then(|repo| repo.host.as_deref()).is_some() {
+            resolved_base_url.as_deref().or(args.host.as_deref())
+        } else {
+            None
+        };
+        if let Some(remote) = select_remote(remotes, args.remote.as_deref(), host_hint)? {
             let needs_inference = resolved_base_url.is_none() || resolved_repo.is_none();
             match remote_url_to_host_and_repo(&remote.url) {
                 Ok(Some((host, repo))) => {
@@ -203,14 +208,6 @@ fn select_remote<'a>(
             .ok_or_else(|| CliError(format!("unknown remote '{name}'")));
     }
 
-    if remotes.len() == 1 {
-        return Ok(remotes.first());
-    }
-
-    if let Some(remote) = remotes.iter().find(|remote| remote.tracks_head) {
-        return Ok(Some(remote));
-    }
-
     if let Some(host_hint) = host_hint {
         let host_key = hostname_identity_key(host_hint)?;
         if let Some(remote) = remotes.iter().find(|remote| {
@@ -222,6 +219,15 @@ fn select_remote<'a>(
         }) {
             return Ok(Some(remote));
         }
+        return Ok(None);
+    }
+
+    if remotes.len() == 1 {
+        return Ok(remotes.first());
+    }
+
+    if let Some(remote) = remotes.iter().find(|remote| remote.tracks_head) {
+        return Ok(Some(remote));
     }
 
     if let Some(origin) = remotes.iter().find(|remote| remote.name == "origin") {
@@ -279,6 +285,7 @@ fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, Option<Strin
 
     let looks_like_sshy_path = !trimmed.contains("://")
         && (trimmed.contains(":/") || trimmed.contains(":~/") || trimmed.contains(":~\\"));
+    let looks_like_absolute_ssh_path = url.scheme() == "ssh" && url.path().starts_with("//");
 
     let mut segments = url
         .path_segments()
@@ -293,7 +300,9 @@ fn remote_url_to_host_and_repo(raw: &str) -> Result<Option<(String, Option<Strin
             let name = segments.pop().unwrap();
             let name = name.strip_suffix(".git").unwrap_or(name);
             let owner = segments.join("/");
-            if url.scheme() == "ssh" && (looks_like_sshy_path || owner.starts_with('~') || owner.starts_with('/')) {
+            if url.scheme() == "ssh"
+                && (looks_like_sshy_path || looks_like_absolute_ssh_path || owner.starts_with('~') || owner.starts_with('/'))
+            {
                 None
             } else {
                 Some(format!("{owner}/{name}"))
