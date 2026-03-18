@@ -315,7 +315,8 @@ Define `--dry-run` as a guarantee:
 For commands that emit files or binary payloads (images, archives, logs, downloads), define one of these patterns:
 
 - Reject machine output with a clear validation error (exit `2`), or
-- Provide metadata-only machine output while writing bytes to a file/path (or to stdout only when explicitly requested and safe).
+- Provide metadata-only machine output while writing bytes to a file/path selected by flag or config. Keep machine metadata on stdout and keep the byte stream out of stdout, or
+- Treat raw bytes on stdout as a separate non-machine mode that is incompatible with JSON/porcelain metadata.
 
 For stream/follow/watch commands, document:
 
@@ -369,7 +370,8 @@ Recommended approach:
 - Store diagnostic files in a dedicated logs directory inside the CLI config directory (e.g., `~/.config/tool/logs/` or `%APPDATA%\tool\logs\`).
 - Name files with a timestamp so they do not collide: `tool-error-20260316-141523-042.log`.
 - In human output modes, print a hint to stderr when a diagnostic file is written: `Diagnostic log saved to ~/.config/tool/logs/tool-error-20260316-141523-042.log`
-- In machine output modes, avoid extra stderr noise; include the diagnostic path in machine output metadata (envelope `meta`, porcelain fields, etc.).
+- In machine output modes with metadata (envelope `meta`, porcelain fields, etc.), avoid extra stderr noise and include the diagnostic path there.
+- For direct-value/value-only machine modes, keep stdout untouched; if you need to surface the diagnostic path, do it in the structured error contract for that mode or in the stderr error message.
 - Suggest including the log when reporting issues: `Include this file when reporting a bug.`
 
 For protocol/service-specific diagnostic logging (exchange capture, auth header redaction), see [service-cli-patterns.md](service-cli-patterns.md).

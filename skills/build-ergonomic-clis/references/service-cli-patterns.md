@@ -116,9 +116,9 @@ Every service-like CLI should present a one-page resolution sequence. A good tem
 1. Read **explicit flags** (target + profile/context + auth overrides).
 2. Read **environment variables** (mirroring flags).
 3. Resolve **explicit profile/context/account selection** (if provided).
-4. Apply **defaults** (global default, per-target default, single-entry inference).
-5. If still unresolved and you support it, apply **context inference** (git remotes, workspace markers, directory discovery) and make it inspectable.
-6. Apply **alias rewrites** (if supported) and handle ambiguity per documented policy (deterministic tie-break + warning, or hard error).
+4. Resolve **explicit target tokens** (exact target key match first, alias scan second, per documented ambiguity policy).
+5. Apply **defaults** (global default, per-target default, single-entry inference) only if the target is still unresolved.
+6. If still unresolved and you support it, apply **context inference** (git remotes, workspace markers, directory discovery) and make it inspectable.
 7. Derive the **target identity key** (per the chosen mode).
 8. Look up **credentials** using the identity key (and the selected profile/context if applicable).
 9. Produce the final **effective target** used for network operations (base URL, timeouts, retries).
@@ -252,14 +252,16 @@ Ecosystems use different names. The design must define:
 Service CLIs should extend the generic error rules with protocol-aware recovery hints:
 
 - Always include the effective target and relevant IDs.
-- For auth errors, print the recovery command (e.g. `tool auth login --target <...>`).
+- For missing/invalid credentials or unauthenticated sessions, print the recovery command (e.g. `tool auth login --target <...>`).
+- For permission/authorization failures, explain that the current identity lacks access and suggest switching profile/account or requesting the missing permission.
 - For not-found errors, echo back what was looked up so typos are obvious.
 - For server-side failures, say it is server-side and suggest server logs.
 - For transport failures (DNS, timeout, TLS, refused), name the target and suggest connectivity checks.
 
 HTTP is one example:
 
-- 401/403 → auth recovery guidance (exit `3`/`4`)
+- 401 → not authenticated / missing or invalid credentials (exit `3`) with login/token recovery guidance
+- 403 → authenticated but not authorized (exit `4`) with permission or profile/account-switch guidance
 - 404 → not found (exit `5`)
 - 409/412 → conflict/precondition (exit `6`)
 - 429 → rate limited (exit `7`)
@@ -269,7 +271,8 @@ Non-HTTP examples:
 
 - TLS handshake failure → transport failure (exit `8`)
 - socket connection refused → transport failure (exit `8`)
-- authentication rejected by protocol handshake → auth failure (exit `3`/`4`)
+- protocol reports missing/invalid credentials during handshake → not authenticated (exit `3`) with login/token recovery guidance
+- protocol reports permission denial for an authenticated identity → not authorized (exit `4`) with permission or profile/account-switch guidance
 
 ## Protocol-Level Diagnostic Logging
 

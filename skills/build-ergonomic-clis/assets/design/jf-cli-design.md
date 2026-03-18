@@ -86,13 +86,13 @@ jf
  |    |    |-- delete <name>       Delete a saved profile
  |    |-- host
  |    |    |-- list                List configured hosts
- |    |    |-- use <hostname>      Set the default host
- |    |    |-- rename <old-hostname> <new-hostname>  Rename a hostname key
- |    |    |-- delete <hostname>   Remove a host and its profiles  [confirm]
+|    |    |-- use <host-key>      Set the default host
+|    |    |-- rename <old-host-key> <new-host-key>  Rename a host key
+|    |    |-- delete <host-key>   Remove a host and its profiles  [confirm]
  |    |    |-- alias
- |    |    |    |-- add <hostname> <alias>    Add an alias
- |    |    |    |-- remove <hostname> <alias> Remove an alias
- |    |    |    |-- list [<hostname>]         List aliases
+|    |    |    |-- add <host-key> <alias>    Add an alias
+|    |    |    |-- remove <host-key> <alias> Remove an alias
+|    |    |    |-- list [<host-key>]         List aliases
  |    |-- api-keys                 [admin] Manage server-level API keys
  |    |    |-- list                List all API keys (GET /Auth/Keys)
  |    |    |-- create <name>       Create a new API key (POST /Auth/Keys)
@@ -471,12 +471,12 @@ jf auth profiles show [<name>] [--server <VALUE>]
 jf auth profiles rename <old> <new> [--server <VALUE>]
 jf auth profiles delete <name> [--server <VALUE>]
 jf auth host list
-jf auth host use <hostname>
-jf auth host rename <old-hostname> <new-hostname>
-jf auth host delete <hostname> [--yes] [--dry-run]
-jf auth host alias add <hostname> <alias>
-jf auth host alias remove <hostname> <alias>
-jf auth host alias list [<hostname>]
+jf auth host use <host-key>
+jf auth host rename <old-host-key> <new-host-key>
+jf auth host delete <host-key> [--yes] [--dry-run]
+jf auth host alias add <host-key> <alias>
+jf auth host alias remove <host-key> <alias>
+jf auth host alias list [<host-key>]
 jf auth api-keys list
 jf auth api-keys create <name>
 jf auth api-keys delete <key>
@@ -558,7 +558,7 @@ Resolution is a two-step process: resolve the host, then resolve the profile wit
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
-| 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <hostname>` |
+| 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <host-key>` |
 
 Bare value lookup order: exact match against `hosts` keys first, then alias scan. Multiple alias matches → warn and use first (config file order).
 
@@ -574,7 +574,7 @@ Given a resolved host:
 | 2 | `JF_PROFILE` env var | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 3 | `defaultProfile` for the host | Used as-is. |
 | 4 | Single profile | If the host has exactly one profile, use it implicitly. |
-| 5 | *(none)* | Error: `No profile specified for host "<hostname>". Use --profile or set a default with: jf auth profiles use <name>` |
+| 5 | *(none)* | Error: `No profile specified for host "<host-key>". Use --profile or set a default with: jf auth profiles use <name>` |
 
 ### Config file
 

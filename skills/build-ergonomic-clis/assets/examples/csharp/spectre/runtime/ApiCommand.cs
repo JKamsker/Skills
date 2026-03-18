@@ -61,6 +61,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
     public sealed override async Task<int> ExecuteAsync(CommandContext context, TSettings settings, CancellationToken cancellationToken)
     {
         var outputMode = settings.OutputMode;
+        var httpDiagnostics = new HttpDiagnosticsContext();
 
         ResolvedContext resolved;
         try
@@ -81,7 +82,7 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
 
         try
         {
-            return await ExecuteCoreAsync(context, settings, resolved, cancellationToken);
+            return await ExecuteCoreAsync(context, settings, resolved, httpDiagnostics, cancellationToken);
         }
         catch (CliException ex)
         {
@@ -90,8 +91,8 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         }
         catch (HttpRequestException ex)
         {
-            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-            RenderNetworkError(ex, logPath, resolved.OutputMode, settings.Verbose, settings.Quiet);
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
+            RenderNetworkError(ex, logPath, resolved.ToSafe(), httpDiagnostics.Snapshot, resolved.OutputMode, settings.Verbose, settings.Quiet);
             return 8;
         }
         catch (OperationCanceledException ex)
@@ -102,13 +103,13 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
                 return 10;
             }
 
-            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
-            RenderNetworkError(new HttpRequestException("Request cancelled or timed out.", ex), logPath, resolved.OutputMode, settings.Verbose, settings.Quiet);
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
+            RenderNetworkError(new HttpRequestException("Request cancelled or timed out.", ex), logPath, resolved.ToSafe(), httpDiagnostics.Snapshot, resolved.OutputMode, settings.Verbose, settings.Quiet);
             return 8;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex);
+            var logPath = _diagnosticLogger.TryWrite(resolved.ToSafe(), context.Name, ex, httpDiagnostics.Snapshot);
             RenderUnexpectedError(ex, logPath, resolved.OutputMode, settings.Quiet);
             return 1;
         }
@@ -118,7 +119,20 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
         CommandContext context,
         TSettings settings,
         ResolvedContext resolved,
+        HttpDiagnosticsContext httpDiagnostics,
         CancellationToken cancellationToken);
+
+    protected static async Task<HttpResponseMessage> SendWithDiagnosticsAsync(
+        HttpClient client,
+        HttpRequestMessage request,
+        HttpDiagnosticsContext httpDiagnostics,
+        CancellationToken cancellationToken)
+    {
+        await httpDiagnostics.CaptureRequestAsync(request, cancellationToken);
+        var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        await httpDiagnostics.CaptureResponseAsync(response, cancellationToken);
+        return response;
+    }
 
     private static void RenderCliError(CliException ex, OutputMode outputMode)
     {
@@ -140,7 +154,14 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
             Console.Error.WriteLine($"Try: {SecretRedactor.RedactPotentialSecrets(ex.RecoveryCommand)}");
     }
 
-    private static void RenderNetworkError(HttpRequestException ex, string? logPath, OutputMode outputMode, bool verbose, bool quiet)
+    private static void RenderNetworkError(
+        HttpRequestException ex,
+        string? logPath,
+        ResolvedContextSafe context,
+        HttpExchangeSnapshot? exchange,
+        OutputMode outputMode,
+        bool verbose,
+        bool quiet)
     {
         if (outputMode == OutputMode.Json)
         {
@@ -156,7 +177,15 @@ public abstract class ApiCommand<TSettings> : AsyncCommand<TSettings>
 
         Console.Error.WriteLine("Network error.");
         if (!quiet && verbose)
+        {
+            Console.Error.WriteLine($"Target: {SecretRedactor.RedactPotentialSecrets(context.BaseUrl)} [{context.TargetIdentityKey}]");
+            Console.Error.WriteLine($"Profile: {context.Profile} (auth source: {context.AuthSource})");
+            if (!string.IsNullOrWhiteSpace(exchange?.RequestMethod) || !string.IsNullOrWhiteSpace(exchange?.RequestUri))
+                Console.Error.WriteLine($"Request: {exchange?.RequestMethod ?? "(unknown)"} {exchange?.RequestUri ?? "(unknown)"}");
+            if (exchange?.ResponseStatusCode is int statusCode)
+                Console.Error.WriteLine($"Response: {statusCode} {exchange.ResponseReasonPhrase}");
             Console.Error.WriteLine($"Details: {SecretRedactor.RedactPotentialSecrets(ex.Message)}");
+        }
         if (!quiet && !string.IsNullOrWhiteSpace(logPath))
             Console.Error.WriteLine($"Diagnostic log saved to: {logPath}");
     }

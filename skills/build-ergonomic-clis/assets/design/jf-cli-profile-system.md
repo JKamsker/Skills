@@ -179,7 +179,7 @@ Evaluated in order, first match wins:
 | 2 | `JF_SERVER` env var | Same rules as `--server`. |
 | 3 | `defaultHost` in config | Used as-is. |
 | 4 | Single host | If `hosts` contains exactly one entry, use it implicitly. |
-| 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <hostname>` |
+| 5 | *(none)* | Error: `No server specified. Use --server or set a default host with: jf auth host use <host-key>` |
 
 **CI/automation escape hatch:** If `JF_TOKEN` is set and the selected server input is a **full URL (or scheme-less `host:port`)**, the CLI may allow an ephemeral, config-less context:
 
@@ -212,7 +212,7 @@ Given a resolved host, evaluated in order:
 | 2 | `JF_PROFILE` env var | For most commands: must exist under the resolved host. For `jf auth login`: may create the profile if it does not exist yet. |
 | 3 | `defaultProfile` for the resolved host | Used as-is. |
 | 4 | Single profile | If the resolved host has exactly one profile, use it implicitly. |
-| 5 | *(none)* | Error: `No profile specified for host "<hostname>". Use --profile or set a default with: jf auth profiles use <name>` |
+| 5 | *(none)* | Error: `No profile specified for host "<host-key>". Use --profile or set a default with: jf auth profiles use <name>` |
  
 ### 3.3 Base URL Resolution
  
@@ -474,32 +474,32 @@ jf auth host list
  
 Aliases column is omitted if no host has any aliases.
  
-#### `jf auth host use <hostname>`
+#### `jf auth host use <host-key>`
  
 Set the global default host.
  
 ```
-jf auth host use <hostname>
+jf auth host use <host-key>
 ```
 
-Sets `defaultHost` in config. Errors if the hostname key is not in `hosts`.
+Sets `defaultHost` in config. Errors if the host key is not in `hosts`.
 
-#### `jf auth host rename <old-hostname> <new-hostname>`
+#### `jf auth host rename <old-host-key> <new-host-key>`
 
-Rename a hostname key.
+Rename a host key.
 
 ```
-jf auth host rename <old-hostname> <new-hostname>
+jf auth host rename <old-host-key> <new-host-key>
 ```
 
 Renames the key in `hosts`. Updates `defaultHost` if it pointed to the old name. Does not change any `baseUrl` values.
  
-#### `jf auth host delete <hostname>`
+#### `jf auth host delete <host-key>`
  
 Remove a host and all its profiles.
  
 ```
-jf auth host delete <hostname> [--yes] [--dry-run]
+jf auth host delete <host-key> [--yes] [--dry-run]
 ```
  
 Removes the host entry and all profiles within it. Follows the global confirmation rules:
@@ -510,12 +510,12 @@ Removes the host entry and all profiles within it. Follows the global confirmati
 
 Clears `defaultHost` if it pointed to this host.
  
-#### `jf auth host alias add <hostname> <alias>`
+#### `jf auth host alias add <host-key> <alias>`
  
 Add an alias for an existing host.
  
 ```
-jf auth host alias add <hostname> <alias>
+jf auth host alias add <host-key> <alias>
 ```
  
 Appends `<alias>` to the host's `aliases` list. If the alias already exists on another host, a warning is emitted:
@@ -555,25 +555,25 @@ Warning: alias "nas.local" matches an existing hostname key and will always be s
 
 The alias is stored but will never be reachable via that value as long as the hostname key exists.
  
-#### `jf auth host alias remove <hostname> <alias>`
+#### `jf auth host alias remove <host-key> <alias>`
  
 Remove an alias from a host.
  
 ```
-jf auth host alias remove <hostname> <alias>
+jf auth host alias remove <host-key> <alias>
 ```
  
 Removes `<alias>` from the host's `aliases` list. Errors if the alias is not set on that host.
  
-#### `jf auth host alias list [<hostname>]`
+#### `jf auth host alias list [<host-key>]`
  
 List aliases.
  
 ```
-jf auth host alias list [<hostname>]
+jf auth host alias list [<host-key>]
 ```
  
-Without `<hostname>`: lists all hosts with their aliases. With `<hostname>`: lists aliases for that host only. Flags duplicate aliases across hosts:
+Without `<host-key>`: lists all hosts with their aliases. With `<host-key>`: lists aliases for that host only. Flags duplicate aliases across hosts:
  
 ```
 jf.home.example.com  [home, jf]

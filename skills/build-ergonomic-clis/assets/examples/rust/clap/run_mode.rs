@@ -42,6 +42,7 @@ pub enum ExitCategory {
 pub struct CliError {
     pub exit: ExitCategory,
     pub message: String,
+    pub already_rendered: bool,
 }
 
 const JSON_SCHEMA_VERSION: u32 = 1;
@@ -93,12 +94,15 @@ pub fn confirm_or_abort(
     }
 
     if matches!(mode.output, OutputFormat::Json | OutputFormat::Raw) {
-        return Err(CliError {
+        let mut error = CliError {
             exit: ExitCategory::Usage,
             message:
                 "Confirmation required. Use --yes to confirm or --dry-run to preview. Prompts are disabled in machine output modes (for example: --json / --output json / --output raw)."
                 .to_string(),
-        });
+            already_rendered: false,
+        };
+        write_error(&mut error, mode.output)?;
+        return Err(error);
     }
 
     if mode.quiet || !io::stdin().is_terminal() || !io::stderr().is_terminal() {
@@ -106,6 +110,7 @@ pub fn confirm_or_abort(
             // Interaction-required refusal (quiet / non-TTY) is exit 2, not exit 10.
             exit: ExitCategory::Usage,
             message: "Confirmation required. Use --yes to confirm or --dry-run to preview.".to_string(),
+            already_rendered: false,
         });
     }
 
@@ -127,26 +132,10 @@ pub fn confirm_or_abort(
 pub fn write_value<T: Serialize>(value: &T, format: OutputFormat) -> Result<(), CliError> {
     match format {
         OutputFormat::Json => {
-            let envelope = JsonEnvelope {
-                ok: true,
-                data: Some(value),
-                error: None,
-                meta: JsonMeta {
-                    schema_version: JSON_SCHEMA_VERSION,
-                },
-            };
-            println!("{}", serde_json::to_string_pretty(&envelope).map_err(json_error)?);
+            write_json_envelope(value, None::<JsonError>, format)?;
         }
         OutputFormat::Raw => {
-            let envelope = JsonEnvelope {
-                ok: true,
-                data: Some(value),
-                error: None,
-                meta: JsonMeta {
-                    schema_version: JSON_SCHEMA_VERSION,
-                },
-            };
-            println!("{}", serde_json::to_string(&envelope).map_err(json_error)?);
+            write_json_envelope(value, None::<JsonError>, format)?;
         }
         OutputFormat::Table => {
             let value = serde_json::to_value(value).map_err(json_error)?;
@@ -154,6 +143,28 @@ pub fn write_value<T: Serialize>(value: &T, format: OutputFormat) -> Result<(), 
         }
     }
 
+    Ok(())
+}
+
+pub fn write_error(error: &mut CliError, format: OutputFormat) -> Result<(), CliError> {
+    if error.already_rendered {
+        return Ok(());
+    }
+
+    match format {
+        OutputFormat::Json | OutputFormat::Raw => {
+            let json_error = JsonError {
+                kind: kind_for_exit(error.exit).to_string(),
+                message: error.message.clone(),
+            };
+            write_json_envelope(Value::Null, Some(json_error), format)?;
+        }
+        OutputFormat::Table => {
+            eprintln!("Error: {}", error.message);
+        }
+    }
+
+    error.already_rendered = true;
     Ok(())
 }
 
@@ -215,6 +226,7 @@ fn io_error(err: io::Error) -> CliError {
     CliError {
         exit: ExitCategory::Runtime,
         message: err.to_string(),
+        already_rendered: false,
     }
 }
 
@@ -222,5 +234,40 @@ fn json_error(err: serde_json::Error) -> CliError {
     CliError {
         exit: ExitCategory::Runtime,
         message: format!("failed to serialize output: {err}"),
+        already_rendered: false,
+    }
+}
+
+fn write_json_envelope<T: Serialize>(
+    value: T,
+    error: Option<JsonError>,
+    format: OutputFormat,
+) -> Result<(), CliError> {
+    let envelope = JsonEnvelope {
+        ok: error.is_none(),
+        data: error.is_none().then_some(&value),
+        error,
+        meta: JsonMeta {
+            schema_version: JSON_SCHEMA_VERSION,
+        },
+    };
+
+    match format {
+        OutputFormat::Json => println!("{}", serde_json::to_string_pretty(&envelope).map_err(json_error)?),
+        OutputFormat::Raw => println!("{}", serde_json::to_string(&envelope).map_err(json_error)?),
+        OutputFormat::Table => unreachable!("table output does not use JSON envelopes"),
+    }
+
+    Ok(())
+}
+
+fn kind_for_exit(exit: ExitCategory) -> &'static str {
+    match exit {
+        ExitCategory::Success => "success",
+        ExitCategory::Runtime => "runtime",
+        ExitCategory::Usage => "refused",
+        ExitCategory::NotAuthenticated => "not_authenticated",
+        ExitCategory::Network => "network",
+        ExitCategory::Cancelled => "cancelled",
     }
 }
