@@ -528,6 +528,11 @@ internal static class MyJdParameterMapper
                 "accountIds",
                 "accounts refresh requires at least one --account-id <id>.",
                 out var warnings),
+            "/accountsV2/removeAccounts" => BuildLongArrayParameters(
+                plan.Query,
+                "accountIds",
+                "accounts remove requires at least one --account-id <id>.",
+                out var warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
             "/config/get" => BuildConfigParameters(
                 plan.Query,
