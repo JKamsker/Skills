@@ -513,6 +513,7 @@ internal static class MyJdParameterMapper
             "/accountsV2/listAccounts" => BuildJsonStringParameter(
                 BuildAccountsQuery(plan.Query, out var warnings),
                 warnings),
+            "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
         };
@@ -629,6 +630,20 @@ internal static class MyJdParameterMapper
         projection["maxResults"] = 20;
         projection["startAt"] = 0;
         return BuildQueryObject(query, projection, out warnings, "uuidlist");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildAccountsGetParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("hoster", out var rawHoster)
+            && rawHoster is not null
+            && !string.IsNullOrWhiteSpace(rawHoster.ToString()))
+        {
+            return (new object?[] { rawHoster.ToString() }, null);
+        }
+
+        throw CliException.Usage("accounts get requires --hoster <name>.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildSystemStorageParameters(object? query, out IReadOnlyList<string>? warnings)
