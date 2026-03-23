@@ -552,6 +552,10 @@ internal static class MyJdParameterMapper
                 "settings config reset requires --interface-name <name> --key <key>.",
                 out var warnings),
             "/config/set" => BuildConfigSetParameters(plan.Query, out var warnings),
+            "/extraction/getArchiveInfo" => BuildLinkAndPackageIdsParameters(
+                plan.Query,
+                "extraction info requires at least one --link-id <id> or --package-id <id>.",
+                out var warnings),
             "/downloadsV2/removeLinks" => BuildLinkAndPackageIdsParameters(
                 plan.Query,
                 "downloads links remove requires at least one --link-id <id> or --package-id <id>.",
