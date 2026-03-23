@@ -55,6 +55,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 - Do not read from stdin unless the user opted in with an explicit flag such as `--stdin` or `--password-stdin`, or the command is explicitly interactive and a TTY is present.
 - Commands without the required arguments should print help or raise a validation error, not guess an implicit target such as "latest".
 - Define and document a single precedence order for flags, environment variables, config, and defaults.
+- Command implementation files must contain only one command class. The usual shape is one command plus its dedicated settings type in the same file; do not group multiple commands into one source file just because they are small or belong to the same branch.
 
 #### Additional rules for service CLIs
 

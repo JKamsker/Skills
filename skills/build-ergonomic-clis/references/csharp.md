@@ -147,8 +147,9 @@ Rules:
 
 - Put shared flags in the base class.
 - Keep command-specific settings small and local to the command.
-- Keep one command and its settings in the same file by default.
-- Keep one command plus one settings type per file maximum unless the settings become unusually large.
+- Keep exactly one command class per source file.
+- The normal layout is one command plus its dedicated settings type in the same file.
+- Do not group multiple commands into one file, even when the commands are tiny wrappers over shared services.
 - Split oversized settings into a nearby feature-local file only when the combined file becomes hard to navigate.
 - Keep command files comfortably below 300 LOC when possible.
 - If a command file approaches 500 LOC, refactor by extracting collaborators, not by slicing the command into `partial` files.
@@ -249,7 +250,8 @@ Commands should call services such as `UsersClient.ListAsync(...)`, not build UR
 Within a feature:
 
 - Keep the command file thin but self-contained.
-- Put the command class and its settings type together in the same file when practical.
+- Put the command class and its dedicated settings type together in the same file when practical.
+- If a branch has ten commands, expect roughly ten command files.
 - Keep feature-local services and clients near the commands that use them.
 - Promote a service or helper upward only when multiple sibling features actually share it.
 - Prefer named collaborators such as `DeploymentPlanBuilder`, `ReleaseFormatter`, or `HostNormalizer` over anonymous helper buckets.
