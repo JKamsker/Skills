@@ -529,7 +529,14 @@ internal static class MyJdParameterMapper
                 "accounts refresh requires at least one --account-id <id>.",
                 out var warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
-            "/config/get" => BuildConfigGetParameters(plan.Query, out var warnings),
+            "/config/get" => BuildConfigParameters(
+                plan.Query,
+                "settings config get requires --interface-name <name> --key <key>.",
+                out var warnings),
+            "/config/reset" => BuildConfigParameters(
+                plan.Query,
+                "settings config reset requires --interface-name <name> --key <key>.",
+                out var warnings),
             "/plugins/get" => BuildPluginsGetParameters(plan.Query, out var warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
@@ -680,7 +687,10 @@ internal static class MyJdParameterMapper
         throw CliException.Usage(usageMessage);
     }
 
-    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildConfigGetParameters(object? query, out IReadOnlyList<string>? warnings)
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildConfigParameters(
+        object? query,
+        string usageMessage,
+        out IReadOnlyList<string>? warnings)
     {
         warnings = null;
         if (query is Dictionary<string, object?> values
@@ -695,7 +705,7 @@ internal static class MyJdParameterMapper
             return (new object?[] { rawInterfaceName.ToString(), storage, rawKey.ToString() }, null);
         }
 
-        throw CliException.Usage("settings config get requires --interface-name <name> --key <key>.");
+        throw CliException.Usage(usageMessage);
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildPluginsGetParameters(object? query, out IReadOnlyList<string>? warnings)
