@@ -498,6 +498,9 @@ internal static class MyJdParameterMapper
             "/downloadsV2/queryLinks" => BuildJsonStringParameter(
                 BuildDownloadsLinksQuery(plan.Query, out var warnings),
                 warnings),
+            "/downloadsV2/queryPackages" => BuildJsonStringParameter(
+                BuildDownloadsPackagesQuery(plan.Query, out var warnings),
+                warnings),
             _ => BuildGenericParameters(plan),
         };
     }
@@ -547,6 +550,16 @@ internal static class MyJdParameterMapper
             ["availableOfflineCount", "availableOnlineCount", "availableTempUnknownCount", "availableUnknownCount", "bytesTotal", "childCount", "comment", "enabled", "hosts", "priority", "saveTo", "status"],
             includeByDefault: true);
         projection["maxResults"] = -1;
+        projection["startAt"] = 0;
+        return BuildQueryObject(query, projection, out warnings, "packageUUIDs");
+    }
+
+    private static object BuildDownloadsPackagesQuery(object? query, out IReadOnlyList<string>? warnings)
+    {
+        var projection = CreateProjection(
+            ["bytesLoaded", "bytesTotal", "childCount", "comment", "enabled", "eta", "finished", "hosts", "priority", "running", "saveTo", "speed", "status"],
+            includeByDefault: true);
+        projection["maxResults"] = 20;
         projection["startAt"] = 0;
         return BuildQueryObject(query, projection, out warnings, "packageUUIDs");
     }
