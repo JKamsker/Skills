@@ -533,6 +533,11 @@ internal static class MyJdParameterMapper
                 "accountIds",
                 "accounts remove requires at least one --account-id <id>.",
                 out var warnings),
+            "/accountsV2/removeBasicAuths" => BuildLongArrayParameters(
+                plan.Query,
+                "basicAuthIds",
+                "accounts basic-auth remove requires at least one --basic-auth-id <id>.",
+                out var warnings),
             "/accountsV2/addAccount" => BuildAccountsAddParameters(plan.Query, out var warnings),
             "/accountsV2/addBasicAuth" => BuildBasicAuthAddParameters(plan.Query, out var warnings),
             "/accountsV2/updateBasicAuth" => BuildBasicAuthUpdateParameters(plan.Query, out var warnings),
