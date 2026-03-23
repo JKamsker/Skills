@@ -557,6 +557,7 @@ internal static class MyJdParameterMapper
                 "linkId",
                 "grabber variants list requires --link-id <id>.",
                 out var warnings),
+            "/linkgrabberv2/setVariant" => BuildGrabberSetVariantParameters(plan.Query, out var warnings),
             "/downloadsV2/setStopMark" => BuildDownloadsStopMarkParameters(plan.Query, out var warnings),
             "/extensions/install" => BuildSingleStringParameter(
                 plan.Query,
@@ -862,6 +863,23 @@ internal static class MyJdParameterMapper
             throw CliException.Usage("downloads stopmark set requires --link-id <id> or --package-id <id>.");
 
         return (new object?[] { linkId, packageId }, null);
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildGrabberSetVariantParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("linkId", out var rawLinkId)
+            && values.TryGetValue("variantId", out var rawVariantId)
+            && rawLinkId is not null
+            && rawVariantId is not null
+            && TryReadLong(rawLinkId, out var linkId)
+            && !string.IsNullOrWhiteSpace(rawVariantId.ToString()))
+        {
+            return (new object?[] { linkId, rawVariantId.ToString() }, null);
+        }
+
+        throw CliException.Usage("grabber variants set requires --link-id <id> --variant-id <id>.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildConfigParameters(
