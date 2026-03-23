@@ -556,6 +556,10 @@ internal static class MyJdParameterMapper
                 plan.Query,
                 "downloads links remove requires at least one --link-id <id> or --package-id <id>.",
                 out var warnings),
+            "/linkgrabberv2/removeLinks" => BuildLinkAndPackageIdsParameters(
+                plan.Query,
+                "grabber links remove requires at least one --link-id <id> or --package-id <id>.",
+                out var warnings),
             "/linkgrabberv2/getVariants" => BuildSingleLongParameter(
                 plan.Query,
                 "linkId",
