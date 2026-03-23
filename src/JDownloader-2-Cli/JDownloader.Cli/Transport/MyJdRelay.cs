@@ -552,6 +552,11 @@ internal static class MyJdParameterMapper
                 "settings config reset requires --interface-name <name> --key <key>.",
                 out var warnings),
             "/config/set" => BuildConfigSetParameters(plan.Query, out var warnings),
+            "/extraction/getArchiveSettings" => BuildStringArrayParameters(
+                plan.Query,
+                "archiveIds",
+                "extraction settings get requires at least one --archive-id <id>.",
+                out var warnings),
             "/extraction/getArchiveInfo" => BuildLinkAndPackageIdsParameters(
                 plan.Query,
                 "extraction info requires at least one --link-id <id> or --package-id <id>.",
@@ -856,6 +861,24 @@ internal static class MyJdParameterMapper
             && TryReadLong(rawValue, out var longValue))
         {
             return (new object?[] { longValue }, null);
+        }
+
+        throw CliException.Usage(usageMessage);
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildStringArrayParameters(
+        object? query,
+        string key,
+        string usageMessage,
+        out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue(key, out var rawValue))
+        {
+            var items = ToStringList(rawValue);
+            if (items.Count > 0)
+                return (new object?[] { items.ToArray() }, null);
         }
 
         throw CliException.Usage(usageMessage);
