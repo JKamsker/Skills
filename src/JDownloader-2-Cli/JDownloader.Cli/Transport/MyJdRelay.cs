@@ -533,6 +533,7 @@ internal static class MyJdParameterMapper
                 "accountIds",
                 "accounts remove requires at least one --account-id <id>.",
                 out var warnings),
+            "/accountsV2/setUserNameAndPassword" => BuildAccountsUpdateParameters(plan.Query, out var warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
             "/config/get" => BuildConfigParameters(
                 plan.Query,
@@ -684,6 +685,25 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage("accounts get requires --hoster <name>.");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildAccountsUpdateParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("accountId", out var rawAccountId)
+            && values.TryGetValue("username", out var rawUsername)
+            && values.TryGetValue("password", out var rawPassword)
+            && rawAccountId is not null
+            && rawUsername is not null
+            && rawPassword is not null
+            && TryReadLong(rawAccountId, out var accountId)
+            && !string.IsNullOrWhiteSpace(rawUsername.ToString()))
+        {
+            return (new object?[] { accountId, rawUsername.ToString(), rawPassword.ToString() }, null);
+        }
+
+        throw CliException.Usage("accounts update requires --account-id <id> --username <name> and exactly one password source.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildLongArrayParameters(
@@ -890,6 +910,25 @@ internal static class MyJdParameterMapper
                 number = (int)longValue;
                 return true;
             case string stringValue when int.TryParse(stringValue, out var parsed):
+                number = parsed;
+                return true;
+            default:
+                number = 0;
+                return false;
+        }
+    }
+
+    private static bool TryReadLong(object? value, out long number)
+    {
+        switch (value)
+        {
+            case long longValue:
+                number = longValue;
+                return true;
+            case int intValue:
+                number = intValue;
+                return true;
+            case string stringValue when long.TryParse(stringValue, out var parsed):
                 number = parsed;
                 return true;
             default:
