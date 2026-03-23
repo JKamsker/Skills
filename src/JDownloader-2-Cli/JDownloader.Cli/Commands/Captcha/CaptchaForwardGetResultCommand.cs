@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Captcha; public sealed class CaptchaForwardGetResultCommand : CaptchaCommandBase { public CaptchaForwardGetResultCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "captcha.forward.get-result"; protected override string Endpoint => "/captchaforward/getResult"; }

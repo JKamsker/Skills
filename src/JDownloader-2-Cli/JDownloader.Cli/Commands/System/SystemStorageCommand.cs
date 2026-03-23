@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.System; public sealed class SystemStorageCommand : SystemCommandBase { public SystemStorageCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "system.storage"; protected override string Endpoint => "/system/getStorageInfos"; }

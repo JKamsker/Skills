@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.System; public sealed class SystemReconnectCommand : SystemCommandBase { public SystemReconnectCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "system.reconnect"; protected override string Endpoint => "/reconnect/doReconnect"; protected override bool Destructive => true; }

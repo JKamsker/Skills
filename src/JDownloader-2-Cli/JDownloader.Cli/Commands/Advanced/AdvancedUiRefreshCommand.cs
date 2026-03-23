@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Advanced; public sealed class AdvancedUiRefreshCommand : AdvancedCommandBase { public AdvancedUiRefreshCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "advanced.ui.refresh"; protected override string Endpoint => "/jd/refreshPlugins"; protected override bool Destructive => true; }

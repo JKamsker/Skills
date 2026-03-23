@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Settings; public sealed class SettingsExtensionsDisableCommand : SettingsCommandBase { public SettingsExtensionsDisableCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "settings.extensions.disable"; protected override string Endpoint => "/extensions/uninstall"; protected override bool Destructive => true; }

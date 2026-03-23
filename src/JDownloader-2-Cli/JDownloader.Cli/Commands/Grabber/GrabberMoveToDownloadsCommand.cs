@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Grabber; public sealed class GrabberMoveToDownloadsCommand : GrabberCommandBase { public GrabberMoveToDownloadsCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "grabber.move-to-downloads"; protected override string Endpoint => "/linkgrabberv2/moveToDownloadlist"; protected override bool Destructive => true; }

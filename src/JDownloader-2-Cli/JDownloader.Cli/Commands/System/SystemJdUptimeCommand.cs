@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.System; public sealed class SystemJdUptimeCommand : SystemCommandBase { public SystemJdUptimeCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "system.jd.uptime"; protected override string Endpoint => "/jd/uptime"; }

@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Settings; public sealed class SettingsConfigResetCommand : SettingsCommandBase { public SettingsConfigResetCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "settings.config.reset"; protected override string Endpoint => "/config/reset"; protected override bool Destructive => true; }

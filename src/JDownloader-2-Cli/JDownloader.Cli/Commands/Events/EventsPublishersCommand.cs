@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Events; public sealed class EventsPublishersCommand : EventsCommandBase { public EventsPublishersCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "events.publishers"; protected override string Endpoint => "/events/listpublisher"; }

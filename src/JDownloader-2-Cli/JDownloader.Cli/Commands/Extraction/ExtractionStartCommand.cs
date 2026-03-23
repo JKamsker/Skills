@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Extraction; public sealed class ExtractionStartCommand : ExtractionCommandBase { public ExtractionStartCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "extraction.start"; protected override string Endpoint => "/extraction/startExtractionNow"; protected override bool Destructive => true; }

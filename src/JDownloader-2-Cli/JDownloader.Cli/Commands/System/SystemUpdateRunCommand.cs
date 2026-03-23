@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.System; public sealed class SystemUpdateRunCommand : SystemCommandBase { public SystemUpdateRunCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "system.update.run"; protected override string Endpoint => "/update/runUpdateCheck"; protected override bool Destructive => true; }

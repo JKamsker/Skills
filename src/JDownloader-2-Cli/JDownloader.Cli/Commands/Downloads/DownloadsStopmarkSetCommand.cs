@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Downloads; public sealed class DownloadsStopmarkSetCommand : DownloadsCommandBase { public DownloadsStopmarkSetCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "downloads.stopmark.set"; protected override string Endpoint => "/downloadsV2/setStopMark"; protected override bool Destructive => true; }

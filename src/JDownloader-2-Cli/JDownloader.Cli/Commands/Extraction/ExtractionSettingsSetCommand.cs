@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Extraction; public sealed class ExtractionSettingsSetCommand : ExtractionCommandBase { public ExtractionSettingsSetCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "extraction.settings.set"; protected override string Endpoint => "/extraction/setArchiveSettings"; protected override bool Destructive => true; }

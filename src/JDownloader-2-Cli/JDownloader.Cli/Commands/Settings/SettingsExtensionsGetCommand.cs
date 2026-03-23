@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Settings; public sealed class SettingsExtensionsGetCommand : SettingsCommandBase { public SettingsExtensionsGetCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "settings.extensions.get"; protected override string Endpoint => "/extensions/list"; }

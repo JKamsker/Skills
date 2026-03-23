@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Advanced; public sealed class AdvancedDialogsAnswerCommand : AdvancedCommandBase { public AdvancedDialogsAnswerCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "advanced.dialogs.answer"; protected override string Endpoint => "/dialogs/answer"; protected override bool Destructive => true; }

@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.System; public sealed class SystemUpdateRestartCommand : SystemCommandBase { public SystemUpdateRestartCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "system.update.restart"; protected override string Endpoint => "/update/restartAndUpdate"; protected override bool Destructive => true; }

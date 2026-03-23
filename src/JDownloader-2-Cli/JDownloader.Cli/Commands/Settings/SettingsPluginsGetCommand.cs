@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Settings; public sealed class SettingsPluginsGetCommand : SettingsCommandBase { public SettingsPluginsGetCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "settings.plugins.get"; protected override string Endpoint => "/plugins/query"; }

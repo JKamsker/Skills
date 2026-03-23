@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Events; public sealed class EventsStatusCommand : EventsCommandBase { public EventsStatusCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "events.status"; protected override string Endpoint => "/events/subscriptionstatus"; }

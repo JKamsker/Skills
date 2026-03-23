@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Advanced; public sealed class AdvancedDialogsListCommand : AdvancedCommandBase { public AdvancedDialogsListCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "advanced.dialogs.list"; protected override string Endpoint => "/dialogs/list"; }

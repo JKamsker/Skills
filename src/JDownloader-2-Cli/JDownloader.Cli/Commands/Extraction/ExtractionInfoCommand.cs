@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Extraction; public sealed class ExtractionInfoCommand : ExtractionCommandBase { public ExtractionInfoCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "extraction.info"; protected override string Endpoint => "/extraction/getArchiveInfo"; }

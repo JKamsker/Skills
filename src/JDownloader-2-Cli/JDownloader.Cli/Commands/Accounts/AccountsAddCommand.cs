@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Accounts; public sealed class AccountsAddCommand : AccountsCommandBase { public AccountsAddCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "accounts.add"; protected override string Endpoint => "/accountsV2/addAccount"; protected override bool Destructive => true; }

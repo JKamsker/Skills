@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Extraction; public sealed class ExtractionAddPasswordCommand : ExtractionCommandBase { public ExtractionAddPasswordCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "extraction.add-password"; protected override string Endpoint => "/extraction/addArchivePassword"; protected override bool Destructive => true; }

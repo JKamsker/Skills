@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Captcha; public sealed class CaptchaJobCommand : CaptchaCommandBase { public CaptchaJobCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "captcha.job"; protected override string Endpoint => "/captcha/getCaptchaJob"; }

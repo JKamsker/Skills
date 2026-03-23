@@ -1,0 +1,2 @@
+using JDownloader.Cli.Runtime; using JDownloader.Cli.Transport;
+namespace JDownloader.Cli.Commands.Downloads; public sealed class DownloadsPauseCommand : DownloadsCommandBase { public DownloadsPauseCommand(IProfileResolver a, IOutputRenderer b, IDiagnosticLogger c, IMyJdTransport d, IConfirmationGuard e) : base(a, b, c, d, e) { } protected override string Operation => "downloads.pause"; protected override string Endpoint => "/downloadcontroller/pause"; protected override bool Destructive => true; }
