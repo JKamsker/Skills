@@ -552,6 +552,10 @@ internal static class MyJdParameterMapper
                 "settings config reset requires --interface-name <name> --key <key>.",
                 out var warnings),
             "/config/set" => BuildConfigSetParameters(plan.Query, out var warnings),
+            "/extraction/startExtractionNow" => BuildLinkAndPackageIdsParameters(
+                plan.Query,
+                "extraction start requires at least one --link-id <id> or --package-id <id>.",
+                out var warnings),
             "/extraction/cancelExtraction" => BuildSingleLongParameter(
                 plan.Query,
                 "controllerId",
