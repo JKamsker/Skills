@@ -43,7 +43,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 ### Implementation
 
 - Load exactly one implementation reference after the UX contract is settled.
-- Use [references/csharp.md](references/csharp.md) for .NET and Spectre.Console.Cli.
+- Use [references/csharp.md](references/csharp.md) for .NET and Spectre.Console.Cli. Default to `.NET 10` unless the repo or user explicitly pins an older target.
 - Use [references/rust.md](references/rust.md) for Rust and clap.
 - If you need a small teaching sketch instead of mining a full repository, prefer the canonical examples under [assets/examples/csharp/spectre](assets/examples/csharp/spectre) or [assets/examples/rust/clap](assets/examples/rust/clap).
 - If the language is not C#/.NET or Rust, stop after the UX/DX design and translate it into framework-agnostic implementation guidance. Do not invent library-specific patterns.

@@ -41,7 +41,7 @@
 
 # jf -- Jellyfin CLI Design Document
 
-Target: C# / .NET 8+ / Spectre.Console.Cli
+Target: C# / .NET 10 / Spectre.Console.Cli
 API baseline: Jellyfin 10.11.3 OpenAPI spec (389 endpoints across 62 API tags)
 
 Designed by applying the ergonomic CLI skill principles to the actual Jellyfin API surface.

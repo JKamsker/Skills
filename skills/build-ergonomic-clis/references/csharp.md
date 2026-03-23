@@ -9,7 +9,9 @@ This is an implementation reference. For the product/UX contract (classification
 
 ### Generic / local baseline
 
-For modern .NET CLIs (including local-only tools), prefer this baseline:
+For .NET CLIs (including local-only tools), prefer this baseline:
+
+- Target `.NET 10` by default. Only choose an older target framework when the repo, dependency graph, deployment environment, or user explicitly requires it.
 
 - `Spectre.Console.Cli` for command trees and help
 - `Microsoft.Extensions.Hosting` for DI, config, and logging
