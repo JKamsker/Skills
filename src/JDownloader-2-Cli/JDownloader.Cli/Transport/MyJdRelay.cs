@@ -537,6 +537,7 @@ internal static class MyJdParameterMapper
                 plan.Query,
                 "settings config reset requires --interface-name <name> --key <key>.",
                 out var warnings),
+            "/config/set" => BuildConfigSetParameters(plan.Query, out var warnings),
             "/plugins/get" => BuildPluginsGetParameters(plan.Query, out var warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
@@ -706,6 +707,25 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage(usageMessage);
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildConfigSetParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("interfaceName", out var rawInterfaceName)
+            && values.TryGetValue("key", out var rawKey)
+            && values.TryGetValue("value", out var rawValue)
+            && rawInterfaceName is not null
+            && rawKey is not null
+            && !string.IsNullOrWhiteSpace(rawInterfaceName.ToString())
+            && !string.IsNullOrWhiteSpace(rawKey.ToString()))
+        {
+            var storage = values.TryGetValue("storage", out var rawStorage) ? rawStorage?.ToString() ?? string.Empty : string.Empty;
+            return (new object?[] { rawInterfaceName.ToString(), storage, rawKey.ToString(), rawValue }, null);
+        }
+
+        throw CliException.Usage("settings config set requires --interface-name <name> --key <key> and exactly one of --value <value> or --value-json <json>.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildPluginsGetParameters(object? query, out IReadOnlyList<string>? warnings)
