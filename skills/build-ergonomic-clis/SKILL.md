@@ -1,12 +1,19 @@
 ---
 name: build-ergonomic-clis
-description: Designs, reviews, and implements product-grade command-line interfaces. Covers command tree structure, flag conventions, auth and profile UX, config precedence, machine-readable output, confirmation and dry-run rules, exit codes, and non-interactive behavior. Use when designing a CLI, reviewing CLI UX/DX, planning command structure, adding argument parsing, or implementing a service CLI. Supports C#/.NET Spectre.Console.Cli and Rust clap.
+description: Designs, reviews, and implements product-grade command-line interfaces. Covers command tree structure, flag conventions, auth and profile UX, config precedence, human-first output defaults with opt-in machine output (--json), confirmation and dry-run rules, exit codes, and non-interactive behavior. Use when designing a CLI, reviewing CLI UX/DX, planning command structure, adding argument parsing, or implementing a service CLI. Supports C#/.NET Spectre.Console.Cli and Rust clap.
 argument-hint: "[design|review|implementation] <description>"
 ---
 
 # Build Ergonomic CLIs
 
 Use this skill to design a CLI as a product surface instead of a thin dump of API endpoints or internal functions.
+
+## Core Principle: Human-First, Machine-Second
+
+- Default output is for humans (tables for lists, concise summaries for actions, readable key/value for objects).
+- Machine-readable output is opt-in via `--json` (or `--output json` if the CLI supports explicit output modes).
+- A command must not emit JSON by default if `--json` exists; `--json` must materially change the output contract.
+- Avoid the common anti-pattern where “human mode” is just pretty-printed JSON; if JSON exists, it must live behind `--json`.
 
 ## When Not to Use This
 
@@ -53,6 +60,8 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 
 - Prefer branches over flat command lists. `auth login` is better than `auth-login`.
 - Do not read from stdin unless the user opted in with an explicit flag such as `--stdin` or `--password-stdin`, or the command is explicitly interactive and a TTY is present.
+- Human-first output by default; machine-readable output only when explicitly requested (typically `--json`).
+- For “list” commands, prefer a table with stable columns over free-form text blobs; truncate long fields (URLs/paths) and put warnings on stderr.
 - Commands without the required arguments should print help or raise a validation error, not guess an implicit target such as "latest".
 - Define and document a single precedence order for flags, environment variables, config, and defaults.
 - Command implementation files must contain only one command class. The usual shape is one command plus its dedicated settings type in the same file; do not group multiple commands into one source file just because they are small or belong to the same branch.
@@ -67,7 +76,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 
 - Produce a top-level command tree and justify the grouping in user-facing terms.
 - Make global flags, reserved flags, environment variables, and config/default precedence explicit.
-- Define human output, machine output, stdout vs stderr rules, confirmation rules, and exit codes.
+- Define human output (default) and machine output (opt-in, typically `--json`), plus stdout vs stderr rules, confirmation rules, and exit codes.
 - Include language-specific implementation notes only when implementation is in scope. For other languages, provide framework-agnostic guidance.
 - Include three to five validation checks or tests covering help, target resolution, non-interactive behavior, destructive flows, or machine-readable output. Use [tests/scenario-checklist.md](tests/scenario-checklist.md) and [tests/regression-checks.md](tests/regression-checks.md) as starting points.
 
@@ -103,9 +112,31 @@ Before you redesign a CLI, write down:
 - Top-level branches and any expert-only or privileged labels that should survive.
 - Exact environment variable names already in use.
 - Stdout vs stderr rules for prompts, banners, streamed logs, and machine output.
+- Current output default per command branch: which commands are “human-first” (tables/summaries) and which are already machine-first (and must be migrated behind `--json`).
 - Domain-specific verbs or diagnostic commands that are part of the CLI's value, even if they do not fit a tiny generic verb set.
 
 #### Additional extraction for service CLIs
 
 - Exact auth modes and credential stores.
 - Target-resolution order, fallback heuristics, and any git or directory inference.
+
+## Completion Checklist (Must Be Fully Satisfied Before Finishing)
+
+Before you finish a response using this skill, you must ensure every checkbox below is satisfied and you must reflect it in your final response (for example as a short "Checklist" section with `[x]` items). If any item cannot be satisfied, stop and explicitly call out what is missing and why (and ask the user for a decision or provide a concrete next step).
+
+- [ ] CLI classification is stated (local-only / hybrid / service-native / multi-surface service).
+- [ ] Command tree is extracted/proposed and justified in user-facing terms.
+- [ ] Flag/env/config/default precedence is explicit (including target/profile/context resolution for service CLIs).
+- [ ] Output contract is explicit and consistent:
+  - [ ] Human-first output is the default.
+  - [ ] `--json` is opt-in machine output and produces a stable envelope/shape.
+  - [ ] No command emits JSON by default when `--json` exists (i.e., `--json` must materially change output).
+  - [ ] “List” commands render as tables (or an equally scannable columnar format) in human mode.
+  - [ ] Stdout vs stderr rules are defined for both human and JSON modes.
+- [ ] Output contract has at least one regression check:
+  - [ ] Default output for a representative list command is not JSON (human-mode table/lines).
+  - [ ] `--json` output for the same command is valid JSON and matches the documented envelope/shape.
+- [ ] Non-interactive behavior is defined (TTY detection, stdin opt-in, prompts, `--quiet`, `--yes`, `--dry-run`).
+- [ ] Destructive action policy is defined (confirmation, previews, and refusal behavior without `--yes` / in non-interactive).
+- [ ] Exit codes and error message strategy are defined (including machine-mode error shapes).
+- [ ] 3–5 validation checks/tests are listed (help, resolution, non-interactive, destructive flows, JSON contract).
