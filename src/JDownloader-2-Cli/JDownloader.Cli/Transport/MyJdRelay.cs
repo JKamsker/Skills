@@ -296,12 +296,11 @@ public sealed class MyJdRelayClient : IMyJdRelayClient
         object? parameters,
         CancellationToken cancellationToken)
     {
-        var requestId = _requestIdProvider.Next();
         var action = new MyJdActionEnvelope
         {
             ApiVer = 1,
             Params = parameters,
-            RequestId = requestId,
+            RequestId = _requestIdProvider.Next(),
             Url = endpoint,
         };
 
@@ -319,17 +318,7 @@ public sealed class MyJdRelayClient : IMyJdRelayClient
         EnsureSuccess(response.StatusCode, content, $"My.JDownloader device call '{endpoint}'");
 
         var decrypted = DecryptBase64(content, session.DeviceEncryptionToken);
-        var document = JsonDocument.Parse(decrypted);
-        if (TryGetProperty(document.RootElement, "rid", out var ridElement)
-            && ridElement.ValueKind == JsonValueKind.Number
-            && ridElement.TryGetInt64(out var responseRid)
-            && responseRid != requestId)
-        {
-            document.Dispose();
-            throw CliException.Transport($"My.JDownloader relay call returned an unexpected request id for '{endpoint}'.");
-        }
-
-        return document;
+        return JsonDocument.Parse(decrypted);
     }
 
     private static object? ExtractDataOrWhole(JsonElement element)
