@@ -552,6 +552,10 @@ internal static class MyJdParameterMapper
                 "settings config reset requires --interface-name <name> --key <key>.",
                 out var warnings),
             "/config/set" => BuildConfigSetParameters(plan.Query, out var warnings),
+            "/downloadsV2/removeLinks" => BuildLinkAndPackageIdsParameters(
+                plan.Query,
+                "downloads links remove requires at least one --link-id <id> or --package-id <id>.",
+                out var warnings),
             "/linkgrabberv2/getVariants" => BuildSingleLongParameter(
                 plan.Query,
                 "linkId",
@@ -880,6 +884,27 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage("grabber variants set requires --link-id <id> --variant-id <id>.");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildLinkAndPackageIdsParameters(
+        object? query,
+        string usageMessage,
+        out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is not Dictionary<string, object?> values)
+            throw CliException.Usage(usageMessage);
+
+        long[] linkIds = [];
+        var hasLinkIds = values.TryGetValue("linkIds", out var rawLinkIds) && TryReadLongArray(rawLinkIds, out linkIds);
+
+        long[] packageIds = [];
+        var hasPackageIds = values.TryGetValue("packageIds", out var rawPackageIds) && TryReadLongArray(rawPackageIds, out packageIds);
+
+        if (!hasLinkIds && !hasPackageIds)
+            throw CliException.Usage(usageMessage);
+
+        return (new object?[] { hasLinkIds ? linkIds : Array.Empty<long>(), hasPackageIds ? packageIds : Array.Empty<long>() }, null);
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildConfigParameters(
