@@ -507,6 +507,9 @@ internal static class MyJdParameterMapper
             "/extensions/list" => BuildJsonStringParameter(
                 BuildExtensionsQuery(plan.Query, out var warnings),
                 warnings),
+            "/plugins/list" => BuildJsonStringParameter(
+                BuildPluginsQuery(plan.Query, out var warnings),
+                warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
         };
@@ -606,6 +609,12 @@ internal static class MyJdParameterMapper
             ["configInterface", "description", "enabled", "iconKey", "installed", "name"],
             includeByDefault: true);
         projection["pattern"] = string.Empty;
+        return BuildQueryObject(query, projection, out warnings);
+    }
+
+    private static object BuildPluginsQuery(object? query, out IReadOnlyList<string>? warnings)
+    {
+        var projection = CreateProjection(["pattern", "version"], includeByDefault: true);
         return BuildQueryObject(query, projection, out warnings);
     }
 
