@@ -168,6 +168,14 @@ If the old-format config exists and the new format does not:
 
 ## Config Store vs Secret Store (recommended)
 
+If more than one storage scheme would be a reasonable fit for the CLI, ask the user which one to use before finalizing the design or implementation plan. Typical competing options are:
+
+- OS credential store / keyring
+- separate secret file
+- single config file with encrypted blobs plus a sidecar key file
+
+If the user does not choose, state the default assumption explicitly in the design.
+
 Do not store plaintext secrets in the general config by default. Prefer:
 
 - OS credential store / external helper / keyring integration, or

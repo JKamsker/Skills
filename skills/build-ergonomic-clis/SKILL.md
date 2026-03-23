@@ -60,6 +60,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 
 - Fail fast when auth or target resolution is missing. Do not start an interactive login flow from an unrelated command.
 - Keep credentials separate from general config, and bind stored credentials to the **chosen target identity key** (hostname/origin/base-URL mode as documented for the CLI).
+- If multiple credential-storage schemes would be suitable for the CLI (for example OS secret store vs separate secret file vs sidecar key-file model), ask the user which scheme to use instead of silently choosing one. If the user does not choose, proceed with a clearly stated default assumption.
 
 ## Definition of Done
 
