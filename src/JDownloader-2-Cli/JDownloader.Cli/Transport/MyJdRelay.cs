@@ -504,6 +504,9 @@ internal static class MyJdParameterMapper
             "/downloadsV2/queryPackages" => BuildJsonStringParameter(
                 BuildDownloadsPackagesQuery(plan.Query, out var warnings),
                 warnings),
+            "/extensions/list" => BuildJsonStringParameter(
+                BuildExtensionsQuery(plan.Query, out var warnings),
+                warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
         };
@@ -595,6 +598,15 @@ internal static class MyJdParameterMapper
 
         warnings = localWarnings.Count == 0 ? null : localWarnings;
         return result;
+    }
+
+    private static object BuildExtensionsQuery(object? query, out IReadOnlyList<string>? warnings)
+    {
+        var projection = CreateProjection(
+            ["configInterface", "description", "enabled", "iconKey", "installed", "name"],
+            includeByDefault: true);
+        projection["pattern"] = string.Empty;
+        return BuildQueryObject(query, projection, out warnings);
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildSystemStorageParameters(object? query, out IReadOnlyList<string>? warnings)
