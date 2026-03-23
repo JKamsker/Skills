@@ -552,6 +552,7 @@ internal static class MyJdParameterMapper
                 "settings config reset requires --interface-name <name> --key <key>.",
                 out var warnings),
             "/config/set" => BuildConfigSetParameters(plan.Query, out var warnings),
+            "/downloadsV2/setStopMark" => BuildDownloadsStopMarkParameters(plan.Query, out var warnings),
             "/extensions/install" => BuildSingleStringParameter(
                 plan.Query,
                 "id",
@@ -818,6 +819,26 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage(usageMessage);
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildDownloadsStopMarkParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is not Dictionary<string, object?> values)
+            throw CliException.Usage("downloads stopmark set requires --link-id <id> or --package-id <id>.");
+
+        long? linkId = null;
+        if (values.TryGetValue("linkId", out var rawLinkId) && rawLinkId is not null && TryReadLong(rawLinkId, out var parsedLinkId))
+            linkId = parsedLinkId;
+
+        long? packageId = null;
+        if (values.TryGetValue("packageId", out var rawPackageId) && rawPackageId is not null && TryReadLong(rawPackageId, out var parsedPackageId))
+            packageId = parsedPackageId;
+
+        if (linkId is null && packageId is null)
+            throw CliException.Usage("downloads stopmark set requires --link-id <id> or --package-id <id>.");
+
+        return (new object?[] { linkId, packageId }, null);
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildConfigParameters(
