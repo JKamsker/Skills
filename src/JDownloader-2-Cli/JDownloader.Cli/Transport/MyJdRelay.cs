@@ -510,6 +510,9 @@ internal static class MyJdParameterMapper
             "/plugins/list" => BuildJsonStringParameter(
                 BuildPluginsQuery(plan.Query, out var warnings),
                 warnings),
+            "/accountsV2/listAccounts" => BuildJsonStringParameter(
+                BuildAccountsQuery(plan.Query, out var warnings),
+                warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
         };
@@ -616,6 +619,16 @@ internal static class MyJdParameterMapper
     {
         var projection = CreateProjection(["pattern", "version"], includeByDefault: true);
         return BuildQueryObject(query, projection, out warnings);
+    }
+
+    private static object BuildAccountsQuery(object? query, out IReadOnlyList<string>? warnings)
+    {
+        var projection = CreateProjection(
+            ["enabled", "error", "trafficLeft", "trafficMax", "userName", "valid", "validUntil"],
+            includeByDefault: true);
+        projection["maxResults"] = 20;
+        projection["startAt"] = 0;
+        return BuildQueryObject(query, projection, out warnings, "uuidlist");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildSystemStorageParameters(object? query, out IReadOnlyList<string>? warnings)
