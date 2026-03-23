@@ -40,21 +40,26 @@ jd2
 ## Resolution, Auth, and Output Rules
 
 - Config files:
-  - `config.json` stores non-secret profile data.
-  - `secrets.json` stores secret material only and is kept separate with owner-only permissions.
+  - `config.json` stores profile data plus encrypted auth and session blobs.
+  - `keyfile.pem` stores sidecar key material used to decrypt the encrypted auth and session blobs in `config.json`.
 - Config paths:
   - Windows: `%APPDATA%/jd2/`
   - macOS: `~/Library/Application Support/jd2/`
   - Linux: `${XDG_CONFIG_HOME:-~/.config}/jd2/`
-  - Overrides: `JD2_CONFIG`, `JD2_SECRETS`
+  - Overrides: `JD2_CONFIG`, `JD2_KEYFILE`
 - Profile model:
   - Profiles are globally named and store `accountEmail`, `defaultDeviceId`, `defaultDeviceName`, `output`, and `timeoutSeconds`.
   - `defaultProfile` is stored once at the root.
-  - Secret bindings are keyed by normalized lowercased email, not by profile name.
+  - Encrypted auth blobs are keyed by normalized lowercased email, not by profile name.
+- Credential protection model:
+  - Generate `keyfile.pem` automatically on first successful login if it does not exist.
+  - Protect stored auth and session blobs with an application-specific KDF that combines the sidecar key-file material with bundled app context material.
+  - Treat this as an explicit at-rest protection tradeoff, not as host-bound secret storage.
+  - Do not derive keys from hardware identifiers or machine-specific values.
 - Auth behavior:
   - `auth login --email <email> [--profile <name>] [--password-stdin]`
   - Human mode may prompt for password only inside `auth login`; machine mode and `--quiet` must use `--password-stdin`.
-  - Persist derived `loginSecret` and any reusable session bundle in `secrets.json`; do not persist the raw password after login completes.
+  - Persist derived `loginSecret` and any reusable session bundle as encrypted blobs in `config.json`; use `keyfile.pem` plus the application KDF context to decrypt them; do not persist the raw password after login completes.
 - Resolution order:
   - Profile: `--profile` > `JD2_PROFILE` > `config.defaultProfile` > single-profile inference > error.
   - Device: `--device` > `JD2_DEVICE` > profile default device > single-device inference > error.
@@ -79,7 +84,7 @@ jd2
   - `src/JDownloader-2-Cli/JDownloader.Cli.Tests/`
   - `src/JDownloader-2-Cli/JDownloader.Cli.sln`
 - Core runtime services and interfaces:
-  - `IProfileStore`, `ISecretStore`, `IProfileResolver`, `IDeviceResolver`
+  - `IProfileStore`, `IKeyFileProvider`, `ICredentialProtector`, `IProfileResolver`, `IDeviceResolver`
   - `IMyJdAuthService`, `IMyJdTransport`, `IRequestIdProvider`
   - `IOutputRenderer`, `IConfirmationGuard`, `IDiagnosticLogger`
 - Shared command bases:
@@ -102,7 +107,7 @@ jd2
 - Help and routing:
   - `jd2 --help`, `jd2 downloads --help`, and `jd2 advanced raw request --help` show the intended task-first tree and examples.
 - Auth and non-interactive behavior:
-  - `auth login --json` without `--password-stdin` fails with exit `2`; `auth login --password-stdin` succeeds and writes config and secrets in the expected locations.
+  - `auth login --json` without `--password-stdin` fails with exit `2`; `auth login --password-stdin` succeeds and writes `config.json` and `keyfile.pem` in the expected locations.
 - Resolution:
   - Profile and device precedence follows flags > env > config > single-entry inference, and ambiguous device names fail instead of guessing.
 - Safety:
@@ -118,3 +123,4 @@ jd2
 - v1 uses My.JDownloader relay transport for normal command execution; `device direct-info` is informational only.
 - Broad coverage means first-class commands for all major capability families, not one CLI leaf per raw endpoint signature.
 - Legacy duplicate families are normalized into the canonical branches; exact legacy behavior remains reachable through `advanced raw request`.
+- The sidecar `keyfile.pem` model is an explicit product choice for credential protection and portability; it is not intended to behave like OS-managed secret storage.
