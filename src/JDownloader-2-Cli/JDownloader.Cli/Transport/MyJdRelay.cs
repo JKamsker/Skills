@@ -513,6 +513,11 @@ internal static class MyJdParameterMapper
             "/accountsV2/listAccounts" => BuildJsonStringParameter(
                 BuildAccountsQuery(plan.Query, out var warnings),
                 warnings),
+            "/accountsV2/disableAccounts" => BuildLongArrayParameters(
+                plan.Query,
+                "accountIds",
+                "accounts disable requires at least one --account-id <id>.",
+                out var warnings),
             "/accountsV2/enableAccounts" => BuildLongArrayParameters(
                 plan.Query,
                 "accountIds",
