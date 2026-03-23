@@ -41,7 +41,10 @@ public sealed class ProtectedBlobRecord
 public sealed class StoredAuthMaterial
 {
     public required string Email { get; set; }
-    public required string DerivedSecretHex { get; set; }
+    public string? DerivedSecretHex { get; set; }
+    public string? ServerSecretHex { get; set; }
+    public string? DeviceSecretHex { get; set; }
+    public int Version { get; set; }
     public required string StorageModel { get; set; }
     public DateTimeOffset CreatedAtUtc { get; set; }
 }

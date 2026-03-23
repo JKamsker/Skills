@@ -34,8 +34,10 @@ public static class CliApplication
         services.AddSingleton<IDiagnosticLogger, DiagnosticLogger>();
         services.AddSingleton<IConfirmationGuard, ConfirmationGuard>();
         services.AddSingleton<IMyJdAuthService, MyJdAuthService>();
-        services.AddSingleton<IMyJdTransport, ScaffoldMyJdTransport>();
         services.AddSingleton<IRequestIdProvider, TimestampRequestIdProvider>();
+        services.AddSingleton<IMyJdRelayClient, MyJdRelayClient>();
+        services.AddSingleton<IDeviceCatalog, DeviceCatalog>();
+        services.AddSingleton<IMyJdTransport, LiveMyJdTransport>();
 
         var app = new CommandApp(new TypeRegistrar(services));
         app.Configure(config =>

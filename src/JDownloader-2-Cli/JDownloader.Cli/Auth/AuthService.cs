@@ -46,8 +46,9 @@ public sealed class MyJdAuthService : IMyJdAuthService
         var authMaterial = new StoredAuthMaterial
         {
             Email = normalizedEmail,
-            DerivedSecretHex = Convert.ToHexString(
-                SHA256.HashData(Encoding.UTF8.GetBytes($"{normalizedEmail}:{password}"))).ToLowerInvariant(),
+            ServerSecretHex = ComputeSecretHex(normalizedEmail, password, "server"),
+            DeviceSecretHex = ComputeSecretHex(normalizedEmail, password, "device"),
+            Version = 2,
             StorageModel = "config+sidecar-keyfile",
             CreatedAtUtc = DateTimeOffset.UtcNow,
         };
@@ -57,6 +58,7 @@ public sealed class MyJdAuthService : IMyJdAuthService
         config.Credentials[normalizedEmail] = new CredentialRecord
         {
             AuthBlob = await _protector.ProtectAsync(authMaterial, cancellationToken),
+            SessionBlob = null,
             UpdatedAtUtc = DateTimeOffset.UtcNow,
         };
 
@@ -84,11 +86,42 @@ public sealed class MyJdAuthService : IMyJdAuthService
 
         var email = NormalizeEmail(profile.AccountEmail);
         config.Credentials.TryGetValue(email, out var credential);
-        return new AuthStatusResult(profileName, email, credential?.AuthBlob is not null, false, credential?.UpdatedAtUtc);
+        var authMaterial = await TryReadAuthMaterialAsync(credential?.AuthBlob, cancellationToken);
+        var transportReady =
+            authMaterial is not null
+            && !string.IsNullOrWhiteSpace(authMaterial.ServerSecretHex)
+            && !string.IsNullOrWhiteSpace(authMaterial.DeviceSecretHex);
+        return new AuthStatusResult(profileName, email, credential?.AuthBlob is not null, transportReady, credential?.UpdatedAtUtc);
     }
 
     private static string NormalizeEmail(string email)
     {
         return email.Trim().ToLowerInvariant();
+    }
+
+    private async Task<StoredAuthMaterial?> TryReadAuthMaterialAsync(ProtectedBlobRecord? blob, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _protector.UnprotectAsync<StoredAuthMaterial>(blob, cancellationToken);
+        }
+        catch (CryptographicException)
+        {
+            return null;
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static string ComputeSecretHex(string normalizedEmail, string password, string domain)
+    {
+        return Convert.ToHexString(
+            SHA256.HashData(Encoding.UTF8.GetBytes($"{normalizedEmail}{password}{domain}"))).ToLowerInvariant();
     }
 }

@@ -30,10 +30,14 @@ public sealed class AuthAndMachineModeTests
         Assert.Contains("\"ok\": true", success.StdOut);
         Assert.True(File.Exists(Path.Combine(configRoot, "config.json")));
         Assert.True(File.Exists(keyFile));
+
+        var status = await CliTestHarness.RunAsync(env, ["auth", "status", "--json"]);
+        Assert.Equal(0, status.ExitCode);
+        Assert.Contains("\"transportReady\": true", status.StdOut);
     }
 
     [Fact]
-    public async Task ProtectedCommandReturnsJsonEnvelopeForTransportFailure()
+    public async Task ProtectedCommandReturnsJsonEnvelopeForMissingAuth()
     {
         var home = CreateTempPath();
         var configRoot = Path.Combine(home, "cfg");
@@ -42,9 +46,9 @@ public sealed class AuthAndMachineModeTests
 
         var result = await CliTestHarness.RunAsync(env, ["downloads", "status", "--json"]);
 
-        Assert.Equal(8, result.ExitCode);
+        Assert.Equal(3, result.ExitCode);
         Assert.Contains("\"ok\": false", result.StdOut);
-        Assert.Contains("\"kind\": \"transport\"", result.StdOut);
+        Assert.Contains("\"kind\": \"not_authenticated\"", result.StdOut);
     }
 
     private static JDownloader.Cli.Config.Jd2Config CreateConfiguredProfile(string name, bool withAccount)

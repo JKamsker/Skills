@@ -1,6 +1,7 @@
 using JDownloader.Cli.Runtime;
 using JDownloader.Cli.Transport;
 using Spectre.Console.Cli;
+using System.Text.Json;
 
 namespace JDownloader.Cli.Commands.Shared;
 
@@ -43,12 +44,7 @@ public abstract class RequestPlanCommandBase : DeviceApiCommand<RequestCommandSe
         var result = await _transport.ExecuteAsync(resolved, plan, cancellationToken);
         return new CommandOutput(
             result.Data,
-            [
-                $"Operation: {plan.Operation}",
-                $"Endpoint: {plan.Endpoint}",
-                $"Profile: {resolved.ProfileName}",
-                $"Device: {resolved.Device?.DisplayValue ?? "(none)"}",
-            ],
+            RenderHumanData(result.Data),
             result.Warnings);
     }
 
@@ -105,6 +101,18 @@ public abstract class RequestPlanCommandBase : DeviceApiCommand<RequestCommandSe
     protected static object? BuildBody(RequestCommandSettings settings)
     {
         return JsonInput.ParseOptional(settings.BodyJson);
+    }
+
+    private static IReadOnlyList<string> RenderHumanData(object data)
+    {
+        return JsonSerializer.Serialize(
+                data,
+                new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = true,
+                })
+            .Split(Environment.NewLine);
     }
 }
 

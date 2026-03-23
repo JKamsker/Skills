@@ -32,23 +32,6 @@ public sealed class TimestampRequestIdProvider : IRequestIdProvider
     public long Next() => Interlocked.Increment(ref _last);
 }
 
-public sealed class ScaffoldMyJdTransport : IMyJdTransport
-{
-    public Task<MyJdTransportResult> ExecuteAsync(ResolvedProfileContext resolved, MyJdRequestPlan plan, CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(resolved.AccountEmail))
-        {
-            throw CliException.NotAuthenticated(
-                "Authentication required for protected commands.",
-                $"Run 'jd2 auth login --profile {resolved.ProfileName} --email <email> --password-stdin'.");
-        }
-
-        throw CliException.Transport(
-            "Live My.JDownloader relay transport is not implemented in this initial scaffold.",
-            "Re-run with --dry-run to inspect the exact request plan.");
-    }
-}
-
 public static class JsonInput
 {
     public static object? ParseOptional(string? raw)
