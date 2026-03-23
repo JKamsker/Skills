@@ -514,6 +514,7 @@ internal static class MyJdParameterMapper
                 BuildAccountsQuery(plan.Query, out var warnings),
                 warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
+            "/plugins/get" => BuildPluginsGetParameters(plan.Query, out var warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
         };
@@ -644,6 +645,26 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage("accounts get requires --hoster <name>.");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildPluginsGetParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("interfaceName", out var rawInterfaceName)
+            && values.TryGetValue("displayName", out var rawDisplayName)
+            && values.TryGetValue("key", out var rawKey)
+            && rawInterfaceName is not null
+            && rawDisplayName is not null
+            && rawKey is not null
+            && !string.IsNullOrWhiteSpace(rawInterfaceName.ToString())
+            && !string.IsNullOrWhiteSpace(rawDisplayName.ToString())
+            && !string.IsNullOrWhiteSpace(rawKey.ToString()))
+        {
+            return (new object?[] { rawInterfaceName.ToString(), rawDisplayName.ToString(), rawKey.ToString() }, null);
+        }
+
+        throw CliException.Usage("settings plugins get requires --interface-name <name> --display-name <name> --key <key>.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildSystemStorageParameters(object? query, out IReadOnlyList<string>? warnings)
