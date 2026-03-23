@@ -514,6 +514,7 @@ internal static class MyJdParameterMapper
                 BuildAccountsQuery(plan.Query, out var warnings),
                 warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
+            "/config/get" => BuildConfigGetParameters(plan.Query, out var warnings),
             "/plugins/get" => BuildPluginsGetParameters(plan.Query, out var warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
@@ -645,6 +646,24 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage("accounts get requires --hoster <name>.");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildConfigGetParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("interfaceName", out var rawInterfaceName)
+            && values.TryGetValue("key", out var rawKey)
+            && rawInterfaceName is not null
+            && rawKey is not null
+            && !string.IsNullOrWhiteSpace(rawInterfaceName.ToString())
+            && !string.IsNullOrWhiteSpace(rawKey.ToString()))
+        {
+            var storage = values.TryGetValue("storage", out var rawStorage) ? rawStorage?.ToString() ?? string.Empty : string.Empty;
+            return (new object?[] { rawInterfaceName.ToString(), storage, rawKey.ToString() }, null);
+        }
+
+        throw CliException.Usage("settings config get requires --interface-name <name> --key <key>.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildPluginsGetParameters(object? query, out IReadOnlyList<string>? warnings)
