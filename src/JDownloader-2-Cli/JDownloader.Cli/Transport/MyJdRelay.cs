@@ -492,6 +492,9 @@ internal static class MyJdParameterMapper
             "/linkgrabberv2/queryLinks" => BuildJsonStringParameter(
                 BuildGrabberLinksQuery(plan.Query, out var warnings),
                 warnings),
+            "/linkgrabberv2/queryPackages" => BuildJsonStringParameter(
+                BuildGrabberPackagesQuery(plan.Query, out var warnings),
+                warnings),
             "/downloadsV2/queryLinks" => BuildJsonStringParameter(
                 BuildDownloadsLinksQuery(plan.Query, out var warnings),
                 warnings),
@@ -536,6 +539,16 @@ internal static class MyJdParameterMapper
         projection["maxResults"] = 20;
         projection["startAt"] = 0;
         return BuildQueryObject(query, projection, out warnings, "packageUUIDs", "jobUUIDs");
+    }
+
+    private static object BuildGrabberPackagesQuery(object? query, out IReadOnlyList<string>? warnings)
+    {
+        var projection = CreateProjection(
+            ["availableOfflineCount", "availableOnlineCount", "availableTempUnknownCount", "availableUnknownCount", "bytesTotal", "childCount", "comment", "enabled", "hosts", "priority", "saveTo", "status"],
+            includeByDefault: true);
+        projection["maxResults"] = -1;
+        projection["startAt"] = 0;
+        return BuildQueryObject(query, projection, out warnings, "packageUUIDs");
     }
 
     private static object BuildQueryObject(
