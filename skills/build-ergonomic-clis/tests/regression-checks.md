@@ -14,7 +14,7 @@ Use this checklist when editing this skill. Check items before considering chang
 ## Target identity + secrets
 
 - [ ] Target identity mode described in docs matches the resolver/runtime example assets.
-- [ ] Secret-storage policy in generic docs matches the worked example and code assets (secrets separate by default; inline secrets only as an explicit fallback).
+- [ ] Secret-storage policy in generic docs matches the worked example and code assets (secrets separate by default; sidecar key-file or inline encrypted secrets only as explicit fallbacks).
 
 ## Exit codes + interactivity
 

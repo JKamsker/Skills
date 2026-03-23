@@ -171,7 +171,8 @@ If the old-format config exists and the new format does not:
 Do not store plaintext secrets in the general config by default. Prefer:
 
 - OS credential store / external helper / keyring integration, or
-- a separate credential file with clearly documented permissions and redaction rules
+- a separate credential file with clearly documented permissions and redaction rules, or
+- a single config file with encrypted credential blobs plus a sidecar key file when that tradeoff is explicitly chosen and documented
 
 ### Example: redacted general config (non-secret)
 
@@ -216,6 +217,21 @@ If a tool chooses inline secret storage anyway, it must:
 - label it explicitly as a tradeoff
 - document file permissions expectations
 - ensure all diagnostics and config dumps redact secrets
+
+### Sidecar key-file option (explicit fallback)
+
+Some CLIs may choose a single config file for normal settings plus encrypted credential blobs, protected by a sidecar key file such as `tool.key.pem`. This is allowed as an explicit fallback design, not the default recommendation.
+
+If a tool chooses this model, it must:
+
+- label it explicitly as a tradeoff rather than presenting it as equivalent to OS credential storage
+- document the exact file layout and permissions for both the config file and the key file
+- state whether the key file is generated automatically, where it lives by default, and how to override the path
+- keep the encrypted credential material in the config and keep the raw key material only in the sidecar file
+- allow app-specific KDF context or namespace material, but do not treat a hard-coded application key as the primary security boundary
+- avoid machine-identity or hardware-derived key material unless the design can tolerate hardware churn and recovery complexity
+- document the real protection boundary: if an attacker obtains both the config and sidecar key file plus the shipped application, decryption is usually possible
+- ensure all diagnostics and config dumps redact encrypted auth blobs and never print the raw sidecar key material
 
 ## Environment Variable Naming for Services
 

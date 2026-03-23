@@ -180,6 +180,7 @@ Recommended split:
 
 - Non-secret config in a config file
 - Secrets in a secure store where possible
+- If explicitly chosen, a single config file with encrypted credential blobs plus a sidecar key file is an acceptable fallback; document the file layout, permissions, and tradeoffs clearly
 - Chosen target identity keys for matching credentials to targets
 
 Guardrails:
