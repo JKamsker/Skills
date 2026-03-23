@@ -548,6 +548,11 @@ internal static class MyJdParameterMapper
                 "id",
                 "settings extensions enable requires --id <id>.",
                 out var warnings),
+            "/extensions/uninstall" => BuildSingleStringParameter(
+                plan.Query,
+                "id",
+                "settings extensions disable requires --id <id>.",
+                out var warnings),
             "/plugins/get" => BuildPluginsGetParameters(plan.Query, out var warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
