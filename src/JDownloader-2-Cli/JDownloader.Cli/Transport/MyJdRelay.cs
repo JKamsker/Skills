@@ -543,6 +543,11 @@ internal static class MyJdParameterMapper
                 "settings config reset requires --interface-name <name> --key <key>.",
                 out var warnings),
             "/config/set" => BuildConfigSetParameters(plan.Query, out var warnings),
+            "/extensions/install" => BuildSingleStringParameter(
+                plan.Query,
+                "id",
+                "settings extensions enable requires --id <id>.",
+                out var warnings),
             "/plugins/get" => BuildPluginsGetParameters(plan.Query, out var warnings),
             "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
@@ -688,6 +693,24 @@ internal static class MyJdParameterMapper
             && TryReadLongArray(rawValues, out var longValues))
         {
             return (new object?[] { longValues }, null);
+        }
+
+        throw CliException.Usage(usageMessage);
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildSingleStringParameter(
+        object? query,
+        string key,
+        string usageMessage,
+        out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue(key, out var rawValue)
+            && rawValue is not null
+            && !string.IsNullOrWhiteSpace(rawValue.ToString()))
+        {
+            return (new object?[] { rawValue.ToString() }, null);
         }
 
         throw CliException.Usage(usageMessage);
