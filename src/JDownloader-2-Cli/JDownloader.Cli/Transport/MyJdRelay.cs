@@ -495,6 +495,9 @@ internal static class MyJdParameterMapper
             "/linkgrabberv2/queryPackages" => BuildJsonStringParameter(
                 BuildGrabberPackagesQuery(plan.Query, out var warnings),
                 warnings),
+            "/linkgrabberv2/queryLinkCrawlerJobs" => BuildJsonStringParameter(
+                BuildGrabberJobsQuery(plan.Query, out var warnings),
+                warnings),
             "/downloadsV2/queryLinks" => BuildJsonStringParameter(
                 BuildDownloadsLinksQuery(plan.Query, out var warnings),
                 warnings),
@@ -562,6 +565,35 @@ internal static class MyJdParameterMapper
         projection["maxResults"] = 20;
         projection["startAt"] = 0;
         return BuildQueryObject(query, projection, out warnings, "packageUUIDs");
+    }
+
+    private static object BuildGrabberJobsQuery(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is not Dictionary<string, object?> values || values.Count == 0)
+            return new Dictionary<string, object?> { ["collectorInfo"] = true };
+
+        if (values.TryGetValue("queryOverride", out var queryOverride) && queryOverride is not null)
+            return queryOverride;
+
+        var result = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["collectorInfo"] = true,
+        };
+
+        if (values.TryGetValue("packageIds", out var packageIds) && TryReadLongArray(packageIds, out var jobIds))
+            result["jobIds"] = jobIds;
+
+        var localWarnings = new List<string>();
+        if (values.TryGetValue("fields", out var fields) && ToStringList(fields).Count > 0)
+            localWarnings.Add("The current live mapper does not translate --fields for grabber jobs list.");
+        if (values.TryGetValue("linkIds", out var linkIds) && !IsEmpty(linkIds))
+            localWarnings.Add("The current live mapper does not translate --link-id for grabber jobs list.");
+        if (values.TryGetValue("hosters", out var hosters) && !IsEmpty(hosters))
+            localWarnings.Add("The current live mapper does not translate --hoster for grabber jobs list.");
+
+        warnings = localWarnings.Count == 0 ? null : localWarnings;
+        return result;
     }
 
     private static object BuildQueryObject(
