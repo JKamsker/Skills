@@ -504,6 +504,7 @@ internal static class MyJdParameterMapper
             "/downloadsV2/queryPackages" => BuildJsonStringParameter(
                 BuildDownloadsPackagesQuery(plan.Query, out var warnings),
                 warnings),
+            "/system/getStorageInfos" => BuildSystemStorageParameters(plan.Query, out var warnings),
             _ => BuildGenericParameters(plan),
         };
     }
@@ -594,6 +595,20 @@ internal static class MyJdParameterMapper
 
         warnings = localWarnings.Count == 0 ? null : localWarnings;
         return result;
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildSystemStorageParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("path", out var rawPath)
+            && rawPath is not null
+            && !string.IsNullOrWhiteSpace(rawPath.ToString()))
+        {
+            return (new object?[] { rawPath.ToString() }, null);
+        }
+
+        throw CliException.Usage("system storage requires --path <path>.");
     }
 
     private static object BuildQueryObject(
