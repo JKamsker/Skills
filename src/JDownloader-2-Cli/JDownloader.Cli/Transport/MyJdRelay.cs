@@ -533,6 +533,7 @@ internal static class MyJdParameterMapper
                 "accountIds",
                 "accounts remove requires at least one --account-id <id>.",
                 out var warnings),
+            "/accountsV2/addAccount" => BuildAccountsAddParameters(plan.Query, out var warnings),
             "/accountsV2/setUserNameAndPassword" => BuildAccountsUpdateParameters(plan.Query, out var warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
             "/config/get" => BuildConfigParameters(
@@ -704,6 +705,25 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage("accounts update requires --account-id <id> --username <name> and exactly one password source.");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildAccountsAddParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("hoster", out var rawHoster)
+            && values.TryGetValue("username", out var rawUsername)
+            && values.TryGetValue("password", out var rawPassword)
+            && rawHoster is not null
+            && rawUsername is not null
+            && rawPassword is not null
+            && !string.IsNullOrWhiteSpace(rawHoster.ToString())
+            && !string.IsNullOrWhiteSpace(rawUsername.ToString()))
+        {
+            return (new object?[] { rawHoster.ToString(), rawUsername.ToString(), rawPassword.ToString() }, null);
+        }
+
+        throw CliException.Usage("accounts add requires --hoster <name> --username <name> and exactly one password source.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildLongArrayParameters(
