@@ -535,6 +535,7 @@ internal static class MyJdParameterMapper
                 out var warnings),
             "/accountsV2/addAccount" => BuildAccountsAddParameters(plan.Query, out var warnings),
             "/accountsV2/addBasicAuth" => BuildBasicAuthAddParameters(plan.Query, out var warnings),
+            "/accountsV2/updateBasicAuth" => BuildBasicAuthUpdateParameters(plan.Query, out var warnings),
             "/accountsV2/setUserNameAndPassword" => BuildAccountsUpdateParameters(plan.Query, out var warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
             "/config/get" => BuildConfigParameters(
@@ -747,6 +748,36 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage("accounts basic-auth add requires --type <http|ftp> --hostmask <mask> --username <name> and exactly one password source.");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildBasicAuthUpdateParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("type", out var rawType)
+            && values.TryGetValue("hostmask", out var rawHostmask)
+            && values.TryGetValue("username", out var rawUsername)
+            && values.TryGetValue("password", out var rawPassword)
+            && rawType is not null
+            && rawHostmask is not null
+            && rawUsername is not null
+            && rawPassword is not null
+            && !string.IsNullOrWhiteSpace(rawType.ToString())
+            && !string.IsNullOrWhiteSpace(rawHostmask.ToString())
+            && !string.IsNullOrWhiteSpace(rawUsername.ToString()))
+        {
+            var payload = JsonSerializer.Serialize(
+                new Dictionary<string, object?>
+                {
+                    ["type"] = rawType.ToString(),
+                    ["hostmask"] = rawHostmask.ToString(),
+                    ["username"] = rawUsername.ToString(),
+                    ["password"] = rawPassword.ToString(),
+                });
+            return (new object?[] { payload }, null);
+        }
+
+        throw CliException.Usage("accounts basic-auth update requires --type <http|ftp> --hostmask <mask> --username <name> and exactly one password source.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildLongArrayParameters(
