@@ -534,6 +534,7 @@ internal static class MyJdParameterMapper
                 "accounts remove requires at least one --account-id <id>.",
                 out var warnings),
             "/accountsV2/addAccount" => BuildAccountsAddParameters(plan.Query, out var warnings),
+            "/accountsV2/addBasicAuth" => BuildBasicAuthAddParameters(plan.Query, out var warnings),
             "/accountsV2/setUserNameAndPassword" => BuildAccountsUpdateParameters(plan.Query, out var warnings),
             "/accountsV2/getPremiumHosterUrl" => BuildAccountsGetParameters(plan.Query, out var warnings),
             "/config/get" => BuildConfigParameters(
@@ -724,6 +725,28 @@ internal static class MyJdParameterMapper
         }
 
         throw CliException.Usage("accounts add requires --hoster <name> --username <name> and exactly one password source.");
+    }
+
+    private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildBasicAuthAddParameters(object? query, out IReadOnlyList<string>? warnings)
+    {
+        warnings = null;
+        if (query is Dictionary<string, object?> values
+            && values.TryGetValue("type", out var rawType)
+            && values.TryGetValue("hostmask", out var rawHostmask)
+            && values.TryGetValue("username", out var rawUsername)
+            && values.TryGetValue("password", out var rawPassword)
+            && rawType is not null
+            && rawHostmask is not null
+            && rawUsername is not null
+            && rawPassword is not null
+            && !string.IsNullOrWhiteSpace(rawType.ToString())
+            && !string.IsNullOrWhiteSpace(rawHostmask.ToString())
+            && !string.IsNullOrWhiteSpace(rawUsername.ToString()))
+        {
+            return (new object?[] { rawType.ToString(), rawHostmask.ToString(), rawUsername.ToString(), rawPassword.ToString() }, null);
+        }
+
+        throw CliException.Usage("accounts basic-auth add requires --type <http|ftp> --hostmask <mask> --username <name> and exactly one password source.");
     }
 
     private static (object? Parameters, IReadOnlyList<string>? Warnings) BuildLongArrayParameters(
