@@ -1,12 +1,14 @@
 ---
 name: build-ergonomic-clis
 description: Designs, reviews, and implements product-grade command-line interfaces. Covers command tree structure, flag conventions, auth and profile UX, config precedence, human-first output defaults with opt-in machine output (--json), confirmation and dry-run rules, exit codes, and non-interactive behavior. Use when designing a CLI, reviewing CLI UX/DX, planning command structure, adding argument parsing, or implementing a service CLI. Supports C#/.NET Spectre.Console.Cli and Rust clap.
-argument-hint: "[design|review|implementation] <description>"
+license: MIT
 ---
 
 # Build Ergonomic CLIs
 
 Use this skill to design a CLI as a product surface instead of a thin dump of API endpoints or internal functions.
+
+Invoke with a task mode and a description: `[design|review|implementation] <description>`. If no mode is given, infer it from the request.
 
 ## Core Principle: Human-First, Machine-Second
 
@@ -54,7 +56,7 @@ Use this skill to design a CLI as a product surface instead of a thin dump of AP
 - Use [references/rust.md](references/rust.md) for Rust and clap.
 - If you need a small teaching sketch instead of mining a full repository, prefer the canonical examples under [assets/examples/csharp/spectre](assets/examples/csharp/spectre) or [assets/examples/rust/clap](assets/examples/rust/clap).
 - If the language is not C#/.NET or Rust, stop after the UX/DX design and translate it into framework-agnostic implementation guidance. Do not invent library-specific patterns.
-- Do not load [tests/fixtures/jellyfin-openapi.json](tests/fixtures/jellyfin-openapi.json) unless you are intentionally replaying the bundled Jellyfin benchmark.
+- The Jellyfin OpenAPI document used by the worked benchmark in [assets/design/jf-cli-design.md](assets/design/jf-cli-design.md) is not bundled, because it is large and rarely needed. Fetch it from a running Jellyfin server at `/api-docs/openapi.json` only when you are intentionally replaying that benchmark.
 
 ## Default Rules
 

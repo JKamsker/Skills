@@ -1,6 +1,6 @@
-
+# Local-only skills directory some agents expect at the repo root.
+# Generate it with: ./scripts/install-skills.sh .agents/skills
 .agents/skills
 
 bin/
 obj/
-

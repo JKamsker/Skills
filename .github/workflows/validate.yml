@@ -1,0 +1,36 @@
+name: Validate skills
+
+on:
+  push:
+    paths:
+      - ".claude-plugin/**"
+      - "plugins/**"
+      - "scripts/validate_skills.py"
+      - ".github/workflows/validate.yml"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Catalog/manifest wiring plus Agent Skills spec conformance of every SKILL.md.
+      # No dependencies, so this is the gate that must always pass.
+      - name: Validate marketplace, plugins, and skills
+        run: python scripts/validate_skills.py
+
+      # Second opinion from the official validator. Kept non-blocking because it
+      # pulls Claude Code from npm and can fail for reasons unrelated to this repo.
+      - name: Validate with Claude Code CLI
+        continue-on-error: true
+        run: |
+          npx -y @anthropic-ai/claude-code@latest plugin validate .
+          for dir in plugins/*/; do
+            npx -y @anthropic-ai/claude-code@latest plugin validate "$dir"
+          done

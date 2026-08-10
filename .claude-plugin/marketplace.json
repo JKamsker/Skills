@@ -1,0 +1,38 @@
+{
+  "name": "jkamsker-skills",
+  "description": "Agent Skills by Jonas Kamsker: CLI design and Roslyn source generator expertise.",
+  "owner": {
+    "name": "Jonas Kamsker",
+    "url": "https://github.com/JKamsker"
+  },
+  "plugins": [
+    {
+      "name": "build-ergonomic-clis",
+      "source": "./plugins/build-ergonomic-clis",
+      "description": "Design, review, and implement product-grade command-line interfaces: command trees, flag conventions, auth and profile UX, config precedence, human-first output with opt-in --json, and exit codes.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Jonas Kamsker",
+        "url": "https://github.com/JKamsker"
+      },
+      "repository": "https://github.com/JKamsker/Skills",
+      "license": "MIT",
+      "category": "development",
+      "keywords": ["cli", "ux", "dx", "spectre-console", "clap", "dotnet", "rust"]
+    },
+    {
+      "name": "incremental-source-generator",
+      "source": "./plugins/incremental-source-generator",
+      "description": "Design, review, debug, and fix Roslyn incremental source generators: pipeline incrementality, equatable models, marker attributes, MSBuild inputs, snapshot tests, and analyzer packaging.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Jonas Kamsker",
+        "url": "https://github.com/JKamsker"
+      },
+      "repository": "https://github.com/JKamsker/Skills",
+      "license": "MIT",
+      "category": "development",
+      "keywords": ["roslyn", "source-generator", "analyzer", "dotnet", "csharp"]
+    }
+  ]
+}

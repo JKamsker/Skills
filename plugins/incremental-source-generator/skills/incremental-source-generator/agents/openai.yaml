@@ -1,0 +1,4 @@
+interface:
+  display_name: "Incremental Source Generator"
+  short_description: "Design and debug Roslyn incremental generators"
+  default_prompt: "Use $incremental-source-generator to design, debug, or fix a Roslyn incremental generator."
