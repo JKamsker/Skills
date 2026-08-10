@@ -1,0 +1,16 @@
+# Normalize text files to LF in the repository, check out platform-native.
+* text=auto
+
+# Shell scripts must stay LF even on Windows checkouts, or they fail on
+# Linux/macOS with "bad interpreter: /usr/bin/env bash^M".
+*.sh text eol=lf
+
+# PowerShell is happiest with CRLF on Windows.
+*.ps1 text eol=crlf
+
+# Never munge binaries.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
