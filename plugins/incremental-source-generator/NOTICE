@@ -36,6 +36,15 @@ follows:
 --------------------------------------------------------------------------------
 Andrew Lock, "Creating a source generator" series
 
-NOT bundled. skills/incremental-source-generator/references/andrew-lock-series.md
-contains only titles, topics, and links. The articles are copyright Andrew Lock
+The articles themselves are NOT bundled. They are copyright Andrew Lock
 (.NET Escapades), all rights reserved, and must be read at their canonical URLs.
+
+skills/incremental-source-generator/references/andrew-lock-series/ contains
+original summaries written for this skill. Each file explains the techniques in
+its own words and links to the canonical article. Short excerpts of Andrew Lock's
+writing appear as attributed, clearly marked quotations, kept brief and verified
+verbatim against the source; they are quotations, not a substitute for reading
+the originals.
+
+If Andrew Lock would prefer these summaries changed or removed, please open an
+issue at https://github.com/JKamsker/Skills/issues and it will be actioned.

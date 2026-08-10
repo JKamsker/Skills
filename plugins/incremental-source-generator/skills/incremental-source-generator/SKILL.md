@@ -24,15 +24,31 @@ Use this skill to build or repair Roslyn incremental generators with an emphasis
    - `references/roslyn/incremental-generators.md`
    - `references/roslyn/incremental-generators.cookbook.md`
 
-   For worked implementation guidance, use `references/andrew-lock-series.md`. It is an annotated
-   index of Andrew Lock's "Creating a source generator" series: pick the row matching the task and
-   fetch that URL. The articles are linked rather than bundled, so fetch only what the task needs:
-   - Fundamentals and first implementation: parts 1, 4, 5, 6
-   - Testing, packaging, and cacheability: parts 2, 3, 9, 10
-   - Advanced marker, configuration, and versioning topics: parts 7, 8, 11, 12, 13, 14, 15
+   Then pull in the `references/andrew-lock-series/` digests by topic. Each one summarises a post in
+   Andrew Lock's "Creating a source generator" series in original prose, with the canonical URL to
+   fetch when you need his full treatment:
+   - Fundamentals and first implementation:
+     - `references/andrew-lock-series/00-series-index.md`
+     - `references/andrew-lock-series/01-creating-an-incremental-generator.md`
+     - `references/andrew-lock-series/04-customising-generated-code-with-marker-attributes.md`
+     - `references/andrew-lock-series/05-finding-namespace-and-type-hierarchy.md`
+     - `references/andrew-lock-series/06-saving-source-generator-output-in-source-control.md`
+   - Testing, packaging, and cacheability:
+     - `references/andrew-lock-series/02-testing-an-incremental-generator-with-snapshot-testing.md`
+     - `references/andrew-lock-series/03-integration-testing-and-packaging.md`
+     - `references/andrew-lock-series/09-avoiding-performance-pitfalls.md`
+     - `references/andrew-lock-series/10-testing-cacheable-pipeline-outputs.md`
+   - Advanced marker, configuration, and versioning topics:
+     - `references/andrew-lock-series/07-marker-attribute-problem-part-1.md`
+     - `references/andrew-lock-series/08-marker-attribute-problem-part-2.md`
+     - `references/andrew-lock-series/11-implementing-an-interceptor.md`
+     - `references/andrew-lock-series/12-reading-compilation-options-and-csharp-version.md`
+     - `references/andrew-lock-series/13-accessing-msbuild-properties-and-user-configuration.md`
+     - `references/andrew-lock-series/14-supporting-multiple-sdk-versions.md`
+     - `references/andrew-lock-series/15-marker-attribute-problem-in-dotnet-10.md`
 
-   If network access is unavailable, work from the bundled Roslyn docs and this skill's checklists;
-   they cover the pipeline, equality, and packaging rules that cause most generator bugs.
+   These digests are self-contained enough to work from offline. When exact detail matters, or the
+   digest points forward to something it does not cover, fetch the canonical article it links.
 
 4. Design or repair the pipeline with incrementality in mind.
    - Prefer `SyntaxProvider.ForAttributeWithMetadataName(...)` when an attribute can drive discovery.

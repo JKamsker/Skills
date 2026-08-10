@@ -172,8 +172,10 @@ Bundled third-party material and its licensing is listed in [NOTICE](NOTICE). In
   [dotnet/roslyn](https://github.com/dotnet/roslyn) and remain MIT © .NET Foundation and
   Contributors; the full notice ships with the plugin at
   [plugins/incremental-source-generator/NOTICE](plugins/incremental-source-generator/NOTICE).
-- Andrew Lock's "Creating a source generator" series is **linked, not bundled**. Those articles
-  are all-rights-reserved, so `references/andrew-lock-series.md` carries only titles, topic
-  summaries, and canonical URLs.
+- Andrew Lock's "Creating a source generator" series is **summarised, not reproduced**. Those
+  articles are all-rights-reserved, so `references/andrew-lock-series/` contains original
+  per-article digests written for this skill, each linking to the canonical post. Short
+  attributed quotations appear where they earn their place, and every one is verified verbatim
+  against the source.
 
 If you think something here is attributed incorrectly, please open an issue.
