@@ -1,5 +1,8 @@
 # JKamsker Skills
 
+[![Validate skills](https://github.com/JKamsker/Skills/actions/workflows/validate.yml/badge.svg)](https://github.com/JKamsker/Skills/actions/workflows/validate.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 [Agent Skills](https://agentskills.io) for software design work, distributed as a Claude Code plugin marketplace and usable directly by any skills-compatible agent.
 
 | Skill | What it does |
