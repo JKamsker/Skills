@@ -1,21 +1,25 @@
 #!/usr/bin/env bash
 # Install these skills into any Agent Skills-compatible agent that reads a skills
-# directory (Codex, Cursor, Gemini CLI, opencode, Claude Code personal skills, ...).
+# directory (Cursor, Gemini CLI, opencode, Claude Code personal skills, ...).
 #
-# Claude Code users should prefer the plugin marketplace instead:
-#   /plugin marketplace add JKamsker/Skills
+# Claude Code and Codex both support this repo as a plugin marketplace, which is
+# simpler than cloning and needs no script:
+#   /plugin marketplace add JKamsker/Skills          # Claude Code
+#   codex plugin marketplace add JKamsker/Skills     # Codex
 #
 # Usage:
 #   ./scripts/install-skills.sh [target-dir]
 #
-# Defaults to ~/.codex/skills. Examples:
+# Defaults to ~/.agents/skills, the cross-agent user-level location from the
+# Agent Skills spec. Examples:
 #   ./scripts/install-skills.sh ~/.claude/skills
 #   ./scripts/install-skills.sh ~/.cursor/skills
+#   ./scripts/install-skills.sh .agents/skills      # repo-local
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TARGET="${1:-$HOME/.codex/skills}"
+TARGET="${1:-$HOME/.agents/skills}"
 
 mkdir -p "$TARGET"
 

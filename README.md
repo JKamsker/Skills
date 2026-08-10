@@ -37,7 +37,22 @@ automatically when a request matches their description.
 
 Pull later updates with `/plugin marketplace update jkamsker-skills`.
 
-### Codex, Cursor, Gemini CLI, opencode, and other agents
+### Codex
+
+Codex reads this repository's `.claude-plugin/marketplace.json` directly, so no clone and no
+separate manifest are needed:
+
+```bash
+codex plugin marketplace add JKamsker/Skills
+codex plugin add build-ergonomic-clis@jkamsker-skills
+codex plugin add incremental-source-generator@jkamsker-skills
+```
+
+This registers the marketplace and enables both plugins in `~/.codex/config.toml`. Pin a ref
+with `JKamsker/Skills@main` if you want to track something other than the default branch, and
+refresh later with `codex plugin marketplace upgrade jkamsker-skills`.
+
+### Cursor, Gemini CLI, opencode, and other agents
 
 A skill is just a folder with a `SKILL.md`, so any agent that reads a skills directory can
 use these directly. Clone the repo and point your agent's skills directory at it:
@@ -46,7 +61,7 @@ use these directly. Clone the repo and point your agent's skills directory at it
 git clone https://github.com/JKamsker/Skills.git
 cd Skills
 
-./scripts/install-skills.sh                      # defaults to ~/.codex/skills
+./scripts/install-skills.sh                      # defaults to ~/.agents/skills
 ./scripts/install-skills.sh ~/.cursor/skills     # or any other target
 ```
 
@@ -56,6 +71,10 @@ On Windows:
 ./scripts/install-skills.ps1
 ./scripts/install-skills.ps1 -TargetDir ~/.claude/skills
 ```
+
+`~/.agents/skills` is the cross-agent user-level location defined by the Agent Skills spec.
+Point the script somewhere else if your agent uses its own path (`~/.cursor/skills`,
+`~/.claude/skills`, `~/.codex/skills`, or a repo-local `.agents/skills`).
 
 The script symlinks each skill when the platform allows it, so `git pull` is enough to stay
 current. Where symlinks are unavailable (Windows without Developer Mode, some filesystems)

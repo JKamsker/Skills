@@ -3,18 +3,21 @@
     Install these skills into any Agent Skills-compatible agent that reads a skills directory.
 
 .DESCRIPTION
-    Works with Codex, Cursor, Gemini CLI, opencode, Claude Code personal skills, and any
-    other client that follows the agentskills.io layout.
+    Works with Cursor, Gemini CLI, opencode, Claude Code personal skills, and any other
+    client that follows the agentskills.io layout.
 
-    Claude Code users should prefer the plugin marketplace instead:
-        /plugin marketplace add JKamsker/Skills
+    Claude Code and Codex both support this repo as a plugin marketplace, which is simpler
+    than cloning and needs no script:
+        /plugin marketplace add JKamsker/Skills          # Claude Code
+        codex plugin marketplace add JKamsker/Skills     # Codex
 
     Symlinks are used when the session is allowed to create them (Developer Mode or an
     elevated shell); otherwise the script falls back to copying, and you re-run it after
     pulling to refresh.
 
 .PARAMETER TargetDir
-    Skills directory to install into. Defaults to ~/.codex/skills.
+    Skills directory to install into. Defaults to ~/.agents/skills, the cross-agent
+    user-level location from the Agent Skills spec.
 
 .EXAMPLE
     ./scripts/install-skills.ps1
@@ -22,7 +25,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$TargetDir = (Join-Path $HOME '.codex/skills')
+    [string]$TargetDir = (Join-Path $HOME '.agents/skills')
 )
 
 $ErrorActionPreference = 'Stop'
