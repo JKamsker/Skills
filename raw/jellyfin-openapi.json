@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "http://jf.home.kamsker.at"
+      "url": "http://jellyfin.example.invalid"
     }
   ],
   "paths": {

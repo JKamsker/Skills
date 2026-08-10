@@ -41,17 +41,33 @@ Get-ChildItem -Path (Join-Path $repoRoot 'plugins') -Directory | ForEach-Object 
     if (-not (Test-Path $skillsRoot)) { return }
 
     Get-ChildItem -Path $skillsRoot -Directory | ForEach-Object {
-        if (-not (Test-Path (Join-Path $_.FullName 'SKILL.md'))) { return }
+        # Capture the pipeline item: inside a catch block $_ is rebound to the
+        # ErrorRecord, so $_.FullName would be $null there.
+        $skill = $_
+        if (-not (Test-Path (Join-Path $skill.FullName 'SKILL.md'))) { return }
 
-        $dest = Join-Path $TargetDir $_.Name
-        if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+        $dest = Join-Path $TargetDir $skill.Name
+        # Stage into a temp path first so an existing install is only removed once
+        # the replacement exists.
+        $staged = "$dest.tmp-$PID"
+        if (Test-Path $staged) { Remove-Item -Recurse -Force $staged }
 
+        $mode = 'linked'
         try {
-            New-Item -ItemType SymbolicLink -Path $dest -Target $_.FullName -ErrorAction Stop | Out-Null
-            Write-Host "linked  $($_.Name) -> $dest"
+            New-Item -ItemType SymbolicLink -Path $staged -Target $skill.FullName -ErrorAction Stop | Out-Null
         } catch {
-            Copy-Item -Recurse -Path $_.FullName -Destination $dest
-            Write-Host "copied  $($_.Name) -> $dest"
+            # Symlinks need Developer Mode or an elevated shell; fall back to a copy.
+            Copy-Item -Recurse -Path $skill.FullName -Destination $staged
+            $mode = 'copied'
+        }
+
+        if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+        Move-Item -Path $staged -Destination $dest
+
+        if ($mode -eq 'linked') {
+            Write-Host "linked  $($skill.Name) -> $dest"
+        } else {
+            Write-Host "copied  $($skill.Name) -> $dest   (re-run after 'git pull' to refresh)"
         }
         $script:installed++
     }

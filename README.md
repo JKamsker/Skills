@@ -35,7 +35,16 @@ Install only the plugins you want. Skills are namespaced, so they appear as
 `/incremental-source-generator:incremental-source-generator`, and Claude also loads them
 automatically when a request matches their description.
 
-Pull later updates with `/plugin marketplace update jkamsker-skills`.
+Updating takes **two** commands. Refreshing the marketplace only updates the catalog listing;
+the installed plugin stays on its cached version until you update the plugin itself:
+
+```
+/plugin marketplace update jkamsker-skills
+/plugin update build-ergonomic-clis@jkamsker-skills
+```
+
+(Third-party marketplaces have auto-update disabled by default, so this is not automatic.
+A restart is required for the new version to load.)
 
 ### Codex
 
@@ -72,9 +81,10 @@ On Windows:
 ./scripts/install-skills.ps1 -TargetDir ~/.claude/skills
 ```
 
-`~/.agents/skills` is the cross-agent user-level location defined by the Agent Skills spec.
-Point the script somewhere else if your agent uses its own path (`~/.cursor/skills`,
-`~/.claude/skills`, `~/.codex/skills`, or a repo-local `.agents/skills`).
+The Agent Skills spec defines the *skill folder format*, not where agents look for skills, so
+discovery paths are per-agent. `~/.agents/skills` is the default here because Codex reads it and
+several other agents have adopted it, but point the script wherever your agent looks
+(`~/.cursor/skills`, `~/.claude/skills`, `~/.codex/skills`, or a repo-local `.agents/skills`).
 
 The script symlinks each skill when the platform allows it, so `git pull` is enough to stay
 current. Where symlinks are unavailable (Windows without Developer Mode, some filesystems)
@@ -106,6 +116,7 @@ plugins/
       agents/openai.yaml                 # Codex interface metadata
       references/  assets/  tests/
   incremental-source-generator/
+    NOTICE                               # third-party licensing, ships with the plugin
     .claude-plugin/plugin.json
     skills/incremental-source-generator/
       SKILL.md
@@ -116,8 +127,9 @@ scripts/
   validate_skills.py                     # CI gate
 ```
 
-Claude Code copies only a plugin's own directory into its cache on install, so unrelated
-top-level directories in this repo (`src/`, `raw/`, `docs/`) are never shipped to users.
+Adding the marketplace clones the whole repository, so `src/`, `raw/`, and `docs/` do land on
+disk once (~21 MB). Installing a plugin is narrower: only that plugin's own directory is copied
+into the plugin cache, so the unrelated directories are never part of an installed plugin.
 
 ## Contributing
 
@@ -126,12 +138,18 @@ Add a skill under `plugins/<plugin-name>/skills/<skill-name>/`, add a
 `.claude-plugin/marketplace.json`. Then:
 
 ```bash
+pip install pyyaml
 python scripts/validate_skills.py
 ```
 
 This checks catalog/manifest wiring, version agreement between `marketplace.json` and each
-`plugin.json`, and that every `SKILL.md` stays within the Agent Skills spec. CI runs the
-same script, plus `claude plugin validate` as a non-blocking second opinion.
+`plugin.json`, that no plugin directory is orphaned from the catalog, that every `SKILL.md`
+stays within the Agent Skills spec, and that no `SKILL.md` links to a file it does not ship.
+CI runs the same script, checks both installer scripts parse, and adds `claude plugin validate`
+as a non-blocking second opinion.
+
+If you bundle third-party material in a skill, record it in [NOTICE](NOTICE) and in a `NOTICE`
+file at that plugin's root, since only the plugin directory travels to installers.
 
 Bump the `version` in **both** the marketplace entry and the plugin manifest on every
 release — Claude Code only offers an update to users when that string changes.
@@ -143,6 +161,19 @@ claude plugin marketplace add ./
 claude plugin install build-ergonomic-clis@jkamsker-skills
 ```
 
-## License
+## License and attribution
 
-MIT — see [LICENSE](LICENSE).
+The original content of this repository — the skills, their instructions and references written
+for this project, the manifests, and the scripts — is MIT licensed. See [LICENSE](LICENSE).
+
+Bundled third-party material and its licensing is listed in [NOTICE](NOTICE). In short:
+
+- The Roslyn design docs under `references/roslyn/` are copied from
+  [dotnet/roslyn](https://github.com/dotnet/roslyn) and remain MIT © .NET Foundation and
+  Contributors; the full notice ships with the plugin at
+  [plugins/incremental-source-generator/NOTICE](plugins/incremental-source-generator/NOTICE).
+- Andrew Lock's "Creating a source generator" series is **linked, not bundled**. Those articles
+  are all-rights-reserved, so `references/andrew-lock-series.md` carries only titles, topic
+  summaries, and canonical URLs.
+
+If you think something here is attributed incorrectly, please open an issue.

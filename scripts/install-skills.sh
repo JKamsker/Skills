@@ -29,11 +29,19 @@ for skill in "$REPO_ROOT"/plugins/*/skills/*/; do
   name="$(basename "$skill")"
   dest="$TARGET/$name"
 
-  rm -rf "$dest"
+  # Stage into a temp path first so an existing install is only removed once the
+  # replacement exists.
+  staged="$dest.tmp-$$"
+  rm -rf "$staged"
   # Filesystems without symlink support fall back to a copy. Note that MSYS/Git Bash
   # `ln -s` silently copies and still exits 0, so check the result rather than $?.
-  ln -s "${skill%/}" "$dest" 2>/dev/null || cp -R "${skill%/}" "$dest"
-  if [ -L "$dest" ]; then
+  ln -s "${skill%/}" "$staged" 2>/dev/null || cp -R "${skill%/}" "$staged"
+
+  if [ -L "$staged" ]; then mode=linked; else mode=copied; fi
+  rm -rf "$dest"
+  mv "$staged" "$dest"
+
+  if [ "$mode" = linked ]; then
     echo "linked  $name -> $dest"
   else
     echo "copied  $name -> $dest   (re-run after 'git pull' to refresh)"

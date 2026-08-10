@@ -1,3 +1,9 @@
+<!--
+Copied from dotnet/roslyn (docs/features/).
+Copyright (c) .NET Foundation and Contributors. Licensed under the MIT License.
+See the NOTICE file at the plugin root for the full license text.
+-->
+
 Title: roslyn/docs/features/incremental-generators.cookbook.md at main · dotnet/roslyn
 
 URL Source: http://github.com/dotnet/roslyn/blob/main/docs/features/incremental-generators.cookbook.md

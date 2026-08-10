@@ -2,5 +2,3 @@ interface:
   display_name: "Build Ergonomic CLIs"
   short_description: "Design, review, and implement ergonomic CLIs"
   default_prompt: "Use $build-ergonomic-clis to design, review, or refactor a scriptable CLI with clear auth, config precedence, and machine output."
-policy:
-  allow_implicit_invocation: false

@@ -1,14 +1,14 @@
 name: Validate skills
 
+# No path filter: the repo is small, and filtering previously let changes to
+# scripts/ and README.md reach main with no CI run at all.
 on:
   push:
-    paths:
-      - ".claude-plugin/**"
-      - "plugins/**"
-      - "scripts/validate_skills.py"
-      - ".github/workflows/validate.yml"
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -20,17 +20,42 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install dependencies
+        run: python -m pip install --quiet pyyaml
+
       # Catalog/manifest wiring plus Agent Skills spec conformance of every SKILL.md.
-      # No dependencies, so this is the gate that must always pass.
+      # This is the blocking gate.
       - name: Validate marketplace, plugins, and skills
         run: python scripts/validate_skills.py
 
-      # Second opinion from the official validator. Kept non-blocking because it
-      # pulls Claude Code from npm and can fail for reasons unrelated to this repo.
+      # The installer is documented for Linux/macOS users, so it must at least parse
+      # and be executable on a fresh clone.
+      - name: Check shell script syntax and mode
+        run: |
+          bash -n scripts/install-skills.sh
+          test -x scripts/install-skills.sh || {
+            echo "::error file=scripts/install-skills.sh::not executable in git (git update-index --chmod=+x)"
+            exit 1
+          }
+
+      - name: Check PowerShell script syntax
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD/scripts/install-skills.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | ForEach-Object { Write-Error $_.Message }; exit 1 }
+          Write-Host "install-skills.ps1 parses cleanly"
+
+      # Second opinion from the official validator. Non-blocking because it pulls
+      # Claude Code from npm and can fail for reasons unrelated to this repo, but
+      # every plugin is still checked even if an earlier one fails.
       - name: Validate with Claude Code CLI
         continue-on-error: true
         run: |
-          npx -y @anthropic-ai/claude-code@latest plugin validate .
+          rc=0
+          npx -y @anthropic-ai/claude-code@latest plugin validate . || rc=1
           for dir in plugins/*/; do
-            npx -y @anthropic-ai/claude-code@latest plugin validate "$dir"
+            npx -y @anthropic-ai/claude-code@latest plugin validate "$dir" || rc=1
           done
+          exit $rc
