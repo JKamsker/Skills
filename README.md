@@ -17,6 +17,16 @@
 /plugin install incremental-source-generator@jkamsker-skills
 ```
 
+The `owner/repo` shorthand clones over SSH. If you do not have GitHub SSH keys set up,
+use the HTTPS URL instead (everything after this is identical):
+
+```
+/plugin marketplace add https://github.com/JKamsker/Skills.git
+```
+
+The same commands work from your shell as `claude plugin marketplace add ...` and
+`claude plugin install ...` if you prefer not to start a session first.
+
 Install only the plugins you want. Skills are namespaced, so they appear as
 `/build-ergonomic-clis:build-ergonomic-clis` and
 `/incremental-source-generator:incremental-source-generator`, and Claude also loads them
