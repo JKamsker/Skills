@@ -1,6 +1,6 @@
 {
   "name": "jkamsker-skills",
-  "description": "Agent Skills by Jonas Kamsker: CLI design and Roslyn source generator expertise.",
+  "description": "Agent Skills by Jonas Kamsker: CLI design, Roslyn source generator, and Gitea/Forgejo forge tooling expertise.",
   "owner": {
     "name": "Jonas Kamsker",
     "url": "https://github.com/JKamsker"
@@ -19,6 +19,20 @@
       "license": "MIT",
       "category": "development",
       "keywords": ["cli", "ux", "dx", "spectre-console", "clap", "dotnet", "rust"]
+    },
+    {
+      "name": "git-forges",
+      "source": "./plugins/git-forges",
+      "description": "Detect and operate Gitea and Forgejo forges: reliable forge detection scripts (Forgejo vs Gitea vs GitHub vs GitLab, sub-path and locked instances included), fj/fj-ex workflows for Forgejo Actions and PRs, and tea plus a REST-backed PowerShell toolkit for Gitea.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Jonas Kamsker",
+        "url": "https://github.com/JKamsker"
+      },
+      "repository": "https://github.com/JKamsker/Skills",
+      "license": "MIT",
+      "category": "development",
+      "keywords": ["forgejo", "gitea", "codeberg", "fj", "tea", "ci", "actions", "forge-detection"]
     },
     {
       "name": "incremental-source-generator",

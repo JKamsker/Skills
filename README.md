@@ -8,6 +8,9 @@
 | Skill | What it does |
 | :---- | :----------- |
 | [`build-ergonomic-clis`](plugins/build-ergonomic-clis/skills/build-ergonomic-clis/SKILL.md) | Design, review, and implement product-grade CLIs: command trees, flag conventions, auth and profile UX, config precedence, human-first output with opt-in `--json`, confirmation rules, and exit codes. Includes C#/.NET Spectre.Console.Cli and Rust clap references. |
+| [`forge-detect`](plugins/git-forges/skills/forge-detect/SKILL.md) | Reliably tell Forgejo from Gitea (from GitHub and GitLab too) for any host or git remote — sub-path installs and locked-down instances included. Ships tested bash and PowerShell detection scripts. |
+| [`forgejo-ops`](plugins/git-forges/skills/forgejo-ops/SKILL.md) | Operate Forgejo instances with `fj` and `fj-ex`: PRs, Actions runs, full CI log download, artifacts, rerun/cancel, dispatch, secrets — plus the argument-order gotchas and runner traps that break first attempts. |
+| [`gitea-ops`](plugins/git-forges/skills/gitea-ops/SKILL.md) | Operate Gitea instances with `tea` and a bundled REST-backed PowerShell toolkit: issues, PRs, Actions failure diagnosis, workflow dispatch — and how to avoid `tea`'s non-interactive-shell hangs. |
 | [`incremental-source-generator`](plugins/incremental-source-generator/skills/incremental-source-generator/SKILL.md) | Design, review, debug, and fix Roslyn incremental source generators: pipeline incrementality, equatable models, marker attributes, MSBuild inputs, snapshot testing, and analyzer packaging. |
 
 ## Install
@@ -17,6 +20,7 @@
 ```
 /plugin marketplace add JKamsker/Skills
 /plugin install build-ergonomic-clis@jkamsker-skills
+/plugin install git-forges@jkamsker-skills
 /plugin install incremental-source-generator@jkamsker-skills
 ```
 
@@ -54,6 +58,7 @@ separate manifest are needed:
 ```bash
 codex plugin marketplace add JKamsker/Skills
 codex plugin add build-ergonomic-clis@jkamsker-skills
+codex plugin add git-forges@jkamsker-skills
 codex plugin add incremental-source-generator@jkamsker-skills
 ```
 
@@ -115,6 +120,12 @@ plugins/
       SKILL.md
       agents/openai.yaml                 # Codex interface metadata
       references/  assets/  tests/
+  git-forges/
+    .claude-plugin/plugin.json
+    skills/
+      forge-detect/                      # SKILL.md + detection scripts (bash + PowerShell)
+      forgejo-ops/                       # SKILL.md (fj / fj-ex workflows)
+      gitea-ops/                         # SKILL.md + REST-backed PowerShell toolkit
   incremental-source-generator/
     NOTICE                               # third-party licensing, ships with the plugin
     .claude-plugin/plugin.json

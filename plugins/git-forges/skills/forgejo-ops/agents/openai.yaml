@@ -1,0 +1,4 @@
+interface:
+  display_name: "Forgejo Ops"
+  short_description: "Operate Forgejo repos, PRs, and Actions with fj and fj-ex"
+  default_prompt: "Use $forgejo-ops to work with this Forgejo repo: PR status, Actions runs, full CI logs, artifacts, rerun, dispatch, and secrets via fj and fj-ex."

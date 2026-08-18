@@ -1,0 +1,12 @@
+{
+  "name": "git-forges",
+  "description": "Detect and operate Gitea and Forgejo forges: reliable forge detection scripts, fj/fj-ex workflows for Forgejo, and tea plus a REST-backed PowerShell toolkit for Gitea.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jonas Kamsker",
+    "url": "https://github.com/JKamsker"
+  },
+  "repository": "https://github.com/JKamsker/Skills",
+  "license": "MIT",
+  "keywords": ["forgejo", "gitea", "codeberg", "fj", "tea", "ci", "actions", "forge-detection"]
+}

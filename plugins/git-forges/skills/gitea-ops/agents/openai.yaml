@@ -1,0 +1,4 @@
+interface:
+  display_name: "Gitea Ops"
+  short_description: "Operate Gitea repos, PRs, and Actions with tea and REST scripts"
+  default_prompt: "Use $gitea-ops to work with this Gitea repo: issues, PRs, Actions failures, and workflow dispatch — using tea interactively and the bundled REST toolkit headlessly."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Forge Detect"
+  short_description: "Identify Forgejo vs Gitea vs GitHub vs GitLab for a host or remote"
+  default_prompt: "Use $forge-detect to identify which software forge the current repo's remote (or a given host) runs, then pick the matching tooling."
