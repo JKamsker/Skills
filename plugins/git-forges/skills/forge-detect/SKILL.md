@@ -75,10 +75,15 @@ Decision order:
 
 ## After detection, route the work
 
-- **Forgejo** → use the `forgejo-ops` skill (`fj` + `fj-ex` CLIs).
-- **Gitea** → use the `gitea-ops` skill (`tea` CLI + bundled REST scripts;
-  beware `tea` hangs in non-interactive shells).
-- **GitHub** → `gh`. **GitLab** → `glab`.
+- **Forgejo** → use the `forgejo-ops` skill — [`fj`](https://codeberg.org/forgejo-contrib/forgejo-cli)
+  (`cargo install forgejo-cli`) + [`fj-ex`](https://github.com/JKamsker/forgejo-cli-ex)
+  (`cargo install forgejo-cli-ex`).
+- **Gitea** → use the `gitea-ops` skill — [`tea`](https://gitea.com/gitea/tea)
+  (binaries at [dl.gitea.com/tea](https://dl.gitea.com/tea/)) + bundled REST
+  scripts; beware `tea` hangs in non-interactive shells.
+- **GitHub** → [`gh`](https://cli.github.com). **GitLab** → [`glab`](https://gitlab.com/gitlab-org/cli).
+
+Each ops skill has a "Where to get them" section with the full install matrix.
 
 Both scripts print `api_base` — pass it to whatever tooling you pick so
 sub-path installs keep working.

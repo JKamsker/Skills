@@ -8,9 +8,8 @@ license: MIT
 
 Two CLIs split the work:
 
-- **`fj`** ([forgejo-cli](https://codeberg.org/forgejo-contrib/forgejo-cli), `cargo install forgejo-cli`) —
-  repo, issue, pr, wiki, actions (tasks/variables/secrets/dispatch), release,
-  tag, user, org, auth, whoami. Talks the token API.
+- **`fj`** — repo, issue, pr, wiki, actions (tasks/variables/secrets/dispatch),
+  release, tag, user, org, auth, whoami. Talks the token API.
 - **`fj-ex`** — Actions detail `fj` cannot reach because Forgejo has no API for
   it: run/job **logs**, **artifacts**, **cancel/rerun**, run/job listing. It
   scrapes web-UI endpoints, so it authenticates with a **UI session (username +
@@ -19,6 +18,28 @@ Two CLIs split the work:
 Both infer host + repo from the git remote when run inside the repo, take
 `--json` for parsing, and accept `--host`/`--repo`/`--remote` when outside one.
 Unsure which forge you're on? Run the `forge-detect` skill first.
+
+## Where to get them
+
+| | `fj` (forgejo-cli) | `fj-ex` (forgejo-cli-ex) |
+|---|---|---|
+| Source | [codeberg.org/forgejo-contrib/forgejo-cli](https://codeberg.org/forgejo-contrib/forgejo-cli) | [github.com/JKamsker/forgejo-cli-ex](https://github.com/JKamsker/forgejo-cli-ex) · [mirror](https://codeberg.org/JKamsker/forgejo-cli-ex) |
+| Crate | [crates.io/crates/forgejo-cli](https://crates.io/crates/forgejo-cli) | [crates.io/crates/forgejo-cli-ex](https://crates.io/crates/forgejo-cli-ex) |
+| Docs | [wiki](https://codeberg.org/forgejo-contrib/forgejo-cli/wiki) · [install page](https://codeberg.org/forgejo-contrib/forgejo-cli/wiki/Installation) | repo README · [build write-up](https://blog.kamsker.at/blog/how-fj-ex-was-built/) |
+| License | Apache-2.0 or MIT | LGPL-3.0-or-later |
+
+```bash
+cargo install forgejo-cli      # installs the `fj` binary
+cargo install forgejo-cli-ex   # installs the `fj-ex` binary
+fj version && fj-ex --version  # note: fj has no --version, fj-ex does
+```
+
+Prefer not to build from source? `fj` ships prebuilt binaries for x86_64 Windows
+and x86_64/aarch64 Linux-GNU on its
+[releases tab](https://codeberg.org/forgejo-contrib/forgejo-cli/releases/latest),
+and is packaged in several distros ([repology](https://repology.org/project/forgejo-cli/versions)).
+`fj-ex` is crates.io-only — `cargo install` is the supported path, so a Rust
+toolchain ([rustup.rs](https://rustup.rs)) is a prerequisite for it either way.
 
 ## Argument order is the #1 failure mode
 

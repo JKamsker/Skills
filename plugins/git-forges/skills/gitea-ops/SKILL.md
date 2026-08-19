@@ -18,6 +18,22 @@ Two tool layers, chosen by context:
 Unsure which forge you're on? Run the `forge-detect` skill first — Gitea and
 Forgejo look identical but diverge in API surface and tooling.
 
+## Where to get `tea`
+
+- Source + docs: [gitea.com/gitea/tea](https://gitea.com/gitea/tea) (MIT)
+- Prebuilt binaries: [dl.gitea.com/tea](https://dl.gitea.com/tea/) — the simplest
+  route on Windows and the one to use in CI images
+- macOS: `brew install tea` (official formula)
+- Windows: MSYS2 [`mingw-w64-tea`](https://packages.msys2.org/base/mingw-w64-tea)
+  (third-party); Arch [`tea`](https://archlinux.org/packages/extra/x86_64/tea/),
+  Alpine [`tea`](https://pkgs.alpinelinux.org/packages?name=tea&branch=edge)
+- Docker: [`gitea/tea`](https://hub.docker.com/r/gitea/tea)
+- From source: `git clone https://gitea.com/gitea/tea && cd tea && make`
+  (needs Go 1.26+ and GNU Make)
+
+The bundled PowerShell toolkit needs no install — it is `scripts/` in this skill
+and only requires PowerShell 5.1+ plus the env vars under [Setup](#setup).
+
 ## The `tea` hang problem (critical)
 
 `tea` commands — including `tea --version` — **hang indefinitely in
